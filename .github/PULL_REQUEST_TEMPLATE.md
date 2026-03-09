@@ -19,7 +19,6 @@ Passos para testar a mudança:
 
 1.
 2.
-3.
 
 ---
 
