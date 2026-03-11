@@ -1,4 +1,4 @@
-# Contributing
+# Git Convention
 
 Para manter o histórico do projeto organizado, usamos o padrão **Conventional Commits**.
 
