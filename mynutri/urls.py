@@ -29,22 +29,7 @@ def health_check(request):
         return JsonResponse({'status': 'error'}, status=503)
 
 
-def api_root(request):
-    """Resposta da raiz — confirma que a API está no ar."""
-    return JsonResponse({
-        'name': 'MyNutri AI API',
-        'version': 'v1',
-        'status': 'online',
-        'docs': '/api/v1/',
-        'health': '/health/',
-        'admin': '/admin/',
-    })
-
-
 urlpatterns = [
-    # Raiz da API
-    path('', api_root, name='api-root'),
-
     # Health check (sem autenticação)
     path('health/', health_check, name='health-check'),
 
