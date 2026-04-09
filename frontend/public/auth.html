@@ -350,9 +350,9 @@
     function afterAuth() {
       // Se veio do questionário com dieta salva em sessionStorage, vai gerar a dieta
       if (intent === 'save_diet' && sessionStorage.getItem('anamneseData')) {
-        window.location.href = 'dieta.html?generate=1';
+        window.location.href = '/dieta/?generate=1';
       } else {
-        window.location.href = 'dieta.html';
+        window.location.href = '/dieta/';
       }
     }
 

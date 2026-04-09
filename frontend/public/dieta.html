@@ -780,7 +780,7 @@
     const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://127.0.0.1:8000/api/v1' : '/api/v1';
     const token = localStorage.getItem('mynutri_token');
 
-    if (!token) { window.location.href = 'auth.html'; }
+    if (!token) { window.location.href = '/auth/'; }
 
     // ── Emojis por refeição ──
     const MEAL_EMOJIS = ['🌅', '🥗', '🍽️', '🥤', '🌙', '🍎', '🥑', '🫐'];
@@ -812,7 +812,7 @@
         });
         if (res.status === 401) {
           ['mynutri_token','mynutri_refresh','mynutri_user'].forEach(k => localStorage.removeItem(k));
-          window.location.href = 'auth.html';
+          window.location.href = '/auth/';
           return;
         }
         if (!res.ok) return;
@@ -836,7 +836,7 @@
     });
     document.getElementById('logoutBtn').addEventListener('click', () => {
       ['mynutri_token','mynutri_refresh','mynutri_user'].forEach(k => localStorage.removeItem(k));
-      window.location.href = 'index.html';
+      window.location.href = '/';
     });
 
     // ════════════════════════════════
@@ -1264,7 +1264,7 @@
     async function fetchExistingDiet() {
       try {
         const res = await fetch(`${API_BASE}/diet`, { headers: { 'Authorization': `Bearer ${token}` } });
-        if (res.status === 401) { localStorage.removeItem('mynutri_token'); window.location.href = 'auth.html'; return; }
+        if (res.status === 401) { localStorage.removeItem('mynutri_token'); window.location.href = '/auth/'; return; }
         if (res.status === 404) { showError('Você ainda não possui um plano alimentar.'); return; }
         if (!res.ok)            { showError('Não foi possível carregar sua dieta.'); return; }
         renderDiet(await res.json());

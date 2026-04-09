@@ -673,7 +673,7 @@
           localStorage.removeItem('mynutri_token');
           localStorage.removeItem('mynutri_refresh');
           localStorage.removeItem('mynutri_user');
-          window.location.href = 'index.html';
+          window.location.href = '/';
         });
       }
 
@@ -757,7 +757,7 @@
           btnSubmit.textContent = 'Redirecionando...';
           btnSubmit.style.opacity = '0.7';
           btnSubmit.style.pointerEvents = 'none';
-          setTimeout(() => { window.location.href = 'auth.html?intent=save_diet'; }, 800);
+          setTimeout(() => { window.location.href = '/auth/?intent=save_diet'; }, 800);
           return;
         }
 
@@ -786,7 +786,7 @@
           }
 
           // Anamnese salva! Redireciona para dieta.html que vai gerar a dieta
-          window.location.href = 'dieta.html?generate=1';
+          window.location.href = '/dieta/?generate=1';
         } catch (err) {
           showSubmitError('Erro de conexão com o servidor. Verifique se o Django está rodando.\n\nDetalhe: ' + err.message);
           resetSubmitBtn();

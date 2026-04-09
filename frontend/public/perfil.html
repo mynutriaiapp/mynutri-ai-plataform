@@ -468,7 +468,7 @@
     /* ── Auth guard ── */
     let token = localStorage.getItem('mynutri_token');
     let userData = JSON.parse(localStorage.getItem('mynutri_user') || 'null');
-    if (!token) { window.location.href = 'auth.html'; }
+    if (!token) { window.location.href = '/auth/'; }
 
     /* ── Helpers ── */
     function initials(name) {
@@ -520,7 +520,7 @@
       localStorage.removeItem('mynutri_token');
       localStorage.removeItem('mynutri_refresh');
       localStorage.removeItem('mynutri_user');
-      window.location.href = 'index.html';
+      window.location.href = '/';
     });
 
     /* ── Sidebar nav ── */
@@ -543,7 +543,7 @@
           headers: { 'Authorization': `Bearer ${token}` }
         });
 
-        if (res.status === 401) { window.location.href = 'auth.html'; return; }
+        if (res.status === 401) { window.location.href = '/auth/'; return; }
         if (!res.ok) throw new Error('Erro ao carregar perfil');
 
         const data = await res.json();
