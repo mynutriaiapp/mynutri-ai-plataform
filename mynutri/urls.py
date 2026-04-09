@@ -1,15 +1,8 @@
 from django.contrib import admin
 from django.urls import path, include
 from django.http import JsonResponse
+from django.views.generic import TemplateView
 from django.db import connection
-
-
-def home(request):
-    return JsonResponse({
-        'status': 'ok',
-        'service': 'MyNutri AI API',
-        'message': 'API is running',
-    })
 
 
 def health_check(request):
@@ -21,7 +14,16 @@ def health_check(request):
 
 
 urlpatterns = [
-    path('', home, name='home'),
+    # Frontend pages
+    path('', TemplateView.as_view(template_name='index.html'), name='home'),
+    path('auth/', TemplateView.as_view(template_name='auth.html'), name='auth'),
+    path('dieta/', TemplateView.as_view(template_name='dieta.html'), name='dieta'),
+    path('perfil/', TemplateView.as_view(template_name='perfil.html'), name='perfil'),
+    path('questionario/', TemplateView.as_view(template_name='questionario.html'), name='questionario'),
+    path('contato/', TemplateView.as_view(template_name='contato.html'), name='contato'),
+    path('privacidade/', TemplateView.as_view(template_name='privacidade.html'), name='privacidade'),
+    path('termos/', TemplateView.as_view(template_name='termos.html'), name='termos'),
+    # Backend
     path('health/', health_check, name='health-check'),
     path('admin/', admin.site.urls),
     path('api/v1/', include('user.urls_api')),

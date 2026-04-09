@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Meu Perfil — MyNutri AI</title>
-  <link rel="stylesheet" href="../src/styles/index.css" />
+  <link rel="stylesheet" href="/static/src/styles/index.css" />
   <style>
     body { background: var(--gray-50); min-height: 100vh; }
 
@@ -281,7 +281,7 @@
   <!-- ===================== HEADER ===================== -->
   <header class="header scrolled" id="header">
     <div class="container header-inner">
-      <a href="index.html" class="logo">
+      <a href="/" class="logo">
         <div class="logo-icon">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7z"/>
@@ -303,11 +303,11 @@
             <strong id="dropdownName">—</strong>
             <span id="dropdownEmail">—</span>
           </div>
-          <a href="perfil.html"  class="dropdown-item active">
+          <a href="/perfil/"  class="dropdown-item active">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
             Meu Perfil
           </a>
-          <a href="dieta.html" class="dropdown-item">
+          <a href="/dieta/" class="dropdown-item">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v4H3zM3 10h18v4H3zM3 17h18v4H3z"/></svg>
             Minha Dieta
           </a>
@@ -650,7 +650,7 @@
             <div class="empty-state">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C8 2 5 6 5 10c0 5 7 12 7 12s7-7 7-12c0-4-3-8-7-8z"/><circle cx="12" cy="10" r="2"/></svg>
               <p>Você ainda não preencheu o questionário nutricional.</p>
-              <a href="questionario.html" class="btn-save" style="text-decoration:none;display:inline-flex;">Preencher Questionário</a>
+              <a href="/questionario/" class="btn-save" style="text-decoration:none;display:inline-flex;">Preencher Questionário</a>
             </div>`;
           return;
         }
@@ -697,7 +697,7 @@
             ${d.allergies  ? `<div class="info-item"><div class="info-item-label">Alergias</div><div class="info-item-value" style="font-size:.875rem;">${d.allergies}</div></div>` : ''}
             ${d.food_preferences ? `<div class="info-item"><div class="info-item-label">Preferências</div><div class="info-item-value" style="font-size:.875rem;">${d.food_preferences}</div></div>` : ''}
           </div>
-          <p style="margin-top:16px;font-size:.8125rem;color:var(--gray-400);">Para alterar esses dados, <a href="questionario.html" style="color:var(--green-600);">refaça o questionário</a>.</p>`;
+          <p style="margin-top:16px;font-size:.8125rem;color:var(--gray-400);">Para alterar esses dados, <a href="/questionario/" style="color:var(--green-600);">refaça o questionário</a>.</p>`;
       } catch {
         container.innerHTML = `<p style="color:var(--gray-400);font-size:.9rem;">Não foi possível carregar o perfil nutricional.</p>`;
       }
