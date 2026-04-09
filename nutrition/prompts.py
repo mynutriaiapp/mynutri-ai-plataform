@@ -11,7 +11,7 @@ com base nos dados fornecidos pelo usuário.
 
 Diretrizes nutricionais:
 
-1. Calcule a necessidade calórica usando a equação de Mifflin-St Jeor e ajuste pelo objetivo
+1. Use o alvo calórico fornecido pelo sistema (já calculado via Mifflin-St Jeor) — NÃO recalcule
 2. Distribua macronutrientes de forma adequada ao objetivo (emagrecimento, manutenção ou hipertrofia)
 3. Crie refeições simples, práticas e típicas do dia a dia brasileiro
 4. Nunca gere dietas extremas (menos de 1200 kcal para mulheres / 1500 kcal para homens)

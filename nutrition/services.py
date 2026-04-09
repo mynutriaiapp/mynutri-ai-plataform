@@ -64,12 +64,28 @@ class AIService:
         """
         Extrai o conteúdo JSON gerado pela IA da resposta da API.
         Suporta o formato padrão OpenAI (choices[0].message.content).
+        Remove markdown code blocks (```json ... ```) caso a IA os inclua.
         """
         try:
             content = api_response['choices'][0]['message']['content']
-            return json.loads(content)
-        except (KeyError, IndexError, json.JSONDecodeError) as e:
+        except (KeyError, IndexError) as e:
             logger.error('Falha ao parsear resposta da IA: %s | Resposta: %s', e, api_response)
+            raise ValueError('A IA retornou um formato inesperado. Tente novamente.')
+
+        # Remove markdown code fences: ```json\n...\n``` ou ```\n...\n```
+        stripped = content.strip()
+        if stripped.startswith('```'):
+            lines = stripped.split('\n')
+            # Remove primeira linha (```json ou ```) e última linha (```)
+            inner = lines[1:] if lines[-1].strip() == '```' else lines[1:]
+            if inner and inner[-1].strip() == '```':
+                inner = inner[:-1]
+            stripped = '\n'.join(inner)
+
+        try:
+            return json.loads(stripped)
+        except json.JSONDecodeError as e:
+            logger.error('Falha ao parsear JSON da IA: %s | Conteúdo: %s', e, content[:200])
             raise ValueError('A IA retornou um formato inesperado. Tente novamente.')
 
     def _normalize_diet_data(self, diet_data: dict) -> dict:

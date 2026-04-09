@@ -1,0 +1,68 @@
+
+# =============================================================================
+# render.yaml — Infraestrutura como código para o Render
+# Docs: https://render.com/docs/infrastructure-as-code
+#
+# Como usar:
+#   1. Faça push deste arquivo para o seu repositório GitHub
+#   2. No Render: New → Blueprint → conecte o repositório
+#   O Render criará automaticamente o Web Service e o PostgreSQL.
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Web Service — API Django
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: mynutri-ai-api
+    runtime: python
+    region: ohio          # Ohio (us-east-1) — menor latência para Brasil
+    plan: free            # troque por "starter" para produção real
+
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn mynutri.wsgi:application --workers 2 --timeout 120 --log-file -"
+
+    # Variáveis de ambiente — os valores com sync: false devem ser preenchidos
+    # manualmente no painel do Render (Environment > Add Environment Variable)
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.0"
+
+      - key: DEBUG
+        value: "False"
+
+      - key: SECRET_KEY
+        generateValue: true   # Render gera um valor aleatório seguro automaticamente
+
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mynutri-db
+          property: connectionString
+
+      - key: ALLOWED_HOSTS
+        sync: false           # preencha com seu domínio: mynutri-ai.onrender.com
+
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false           # preencha com a URL do seu frontend
+
+      - key: AI_API_KEY
+        sync: false           # sua chave da OpenAI/Gemini — NUNCA commite no git
+
+      - key: AI_API_URL
+        sync: false           # ex: https://api.openai.com/v1/chat/completions
+
+      - key: AI_MODEL
+        value: "gpt-3.5-turbo"
+
+      - key: LOG_LEVEL
+        value: "WARNING"
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL — banco de dados gerenciado pelo Render
+  # ---------------------------------------------------------------------------
+databases:
+  - name: mynutri-db
+    databaseName: mynutri
+    user: mynutri
+    region: ohio
+    plan: free              # free tier: 90 dias; troque por "starter" para produção

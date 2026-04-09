@@ -1,9 +1,26 @@
-asgiref==3.11.1
+# ─── Core Django ──────────────────────────────────────────────────────────────
 Django==6.0.3
-python-dotenv==1.1.0
+asgiref==3.11.1
 sqlparse==0.5.5
-tzdata==2025.3
+
+# ─── REST API & Autenticação ──────────────────────────────────────────────────
 djangorestframework==3.15.1
 djangorestframework-simplejwt==5.4.0
-django-cors-headers==4.7.0
 PyJWT==2.12.1
+django-cors-headers==4.7.0
+
+# ─── Variáveis de ambiente ────────────────────────────────────────────────────
+python-dotenv==1.1.0
+dj-database-url==3.1.2
+
+# ─── Produção ─────────────────────────────────────────────────────────────────
+gunicorn==25.3.0
+whitenoise==6.12.0
+psycopg2-binary==2.9.11
+
+# ─── Utilidades ───────────────────────────────────────────────────────────────
+tzdata==2025.3
+
+# ─── Testes ───────────────────────────────────────────────────────────────────
+pytest==9.0.3
+pytest-django==4.12.0

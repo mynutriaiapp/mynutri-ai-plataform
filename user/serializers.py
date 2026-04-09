@@ -11,6 +11,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     Campos esperados: nome (first_name), email, senha (password)
     """
     nome = serializers.CharField(write_only=True)
+    email = serializers.EmailField(write_only=True)
     senha = serializers.CharField(write_only=True, min_length=8)
 
     class Meta:
