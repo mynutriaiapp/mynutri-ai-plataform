@@ -272,6 +272,12 @@ button { cursor: pointer; font-family: inherit; border: none; }
   font-size: 1.125rem;
 }
 
+.logo img {
+  height: 60px !important;
+  width: auto;
+  object-fit: contain;
+}
+
 .logo span {
   color: var(--green-600);
 }
