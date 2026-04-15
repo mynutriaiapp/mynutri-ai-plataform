@@ -396,6 +396,12 @@
         document.getElementById('navName').textContent       = user.nome.split(' ')[0];
         document.getElementById('dropdownName').textContent  = user.nome;
         document.getElementById('dropdownEmail').textContent = user.email || '';
+
+        // Pré-preenche o formulário de contato com os dados do usuário autenticado
+        const nomeField  = document.getElementById('contact-nome');
+        const emailField = document.getElementById('contact-email');
+        if (nomeField  && !nomeField.value)  nomeField.value  = user.nome  || '';
+        if (emailField && !emailField.value) emailField.value = user.email || '';
       }
 
       async function loadUser() {
