@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Minha Dieta — MyNutri AI</title>
   <meta name="description" content="Seu plano alimentar personalizado gerado por inteligência artificial." />
+  <link rel="icon" type="image/png" href="/static/src/assets/mynutriai-logo.png" />
   <link rel="stylesheet" href="/static/src/styles/index.css" />
   <style>
     body { background: var(--gray-50); min-height: 100vh; }
@@ -26,7 +27,7 @@
     .state-center {
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
-      min-height: 50vh; text-align: center; gap: 16px;
+      min-height: 68vh; text-align: center; gap: 16px;
     }
     .spinner {
       width: 48px; height: 48px;
@@ -531,6 +532,10 @@
           <a href="/dieta/" class="dropdown-item active">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v4H3zM3 10h18v4H3zM3 17h18v4H3z"/></svg>
             Minha Dieta
+          </a>
+          <a href="/historico/" class="dropdown-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+            Histórico
           </a>
           <div class="dropdown-divider"></div>
           <button class="dropdown-item danger" id="logoutBtn">
@@ -1232,14 +1237,108 @@
     }
 
     // ════════════════════════════════
-    //  LOAD
+    //  LOAD — geração assíncrona com polling
     // ════════════════════════════════
+
+    // Mensagens rotativas exibidas enquanto a IA processa
+    const LOADING_TIPS = [
+      'Calculando seu metabolismo basal...',
+      'Ajustando macronutrientes ao seu objetivo...',
+      'Selecionando alimentos compatíveis com suas restrições...',
+      'Distribuindo refeições ao longo do dia...',
+      'Verificando equilíbrio calórico...',
+      'Montando o plano personalizado...',
+      'Quase pronto! Finalizando sua dieta...',
+    ];
+    let _tipIndex = 0;
+    let _tipInterval = null;
+
+    function startLoadingTips() {
+      const msgEl = document.getElementById('loading-msg');
+      _tipIndex = 0;
+      msgEl.textContent = LOADING_TIPS[0];
+      _tipInterval = setInterval(() => {
+        _tipIndex = (_tipIndex + 1) % LOADING_TIPS.length;
+        msgEl.textContent = LOADING_TIPS[_tipIndex];
+      }, 4000);
+    }
+
+    function stopLoadingTips() {
+      if (_tipInterval) { clearInterval(_tipInterval); _tipInterval = null; }
+    }
+
+    /**
+     * Faz polling no endpoint de status a cada POLL_INTERVAL ms.
+     * Retorna uma Promise que resolve com o DietPlan ao concluir,
+     * ou rejeita com a mensagem de erro se falhar.
+     */
+    function pollJobStatus(jobId) {
+      const POLL_INTERVAL = 3000;  // 3 segundos
+      const MAX_POLLS     = 60;    // timeout: 3min (60 × 3s)
+      const headers       = { 'Authorization': `Bearer ${token}` };
+
+      return new Promise((resolve, reject) => {
+        let polls = 0;
+
+        const interval = setInterval(async () => {
+          polls++;
+
+          try {
+            const res = await fetch(`${API_BASE}/diet/status/${jobId}`, { headers });
+
+            if (res.status === 401) {
+              clearInterval(interval);
+              stopLoadingTips();
+              localStorage.removeItem('mynutri_token');
+              window.location.href = '/auth/';
+              return;
+            }
+
+            if (!res.ok) {
+              clearInterval(interval);
+              stopLoadingTips();
+              reject(new Error('Erro ao verificar status da geração.'));
+              return;
+            }
+
+            const data = await res.json();
+
+            if (data.status === 'done' && data.diet_plan_id) {
+              clearInterval(interval);
+              stopLoadingTips();
+              // Busca o plano completo pelo ID retornado
+              const planRes = await fetch(`${API_BASE}/diet/${data.diet_plan_id}`, { headers });
+              if (!planRes.ok) { reject(new Error('Erro ao carregar dieta gerada.')); return; }
+              resolve(await planRes.json());
+
+            } else if (data.status === 'failed') {
+              clearInterval(interval);
+              stopLoadingTips();
+              reject(new Error(data.error || 'Falha ao gerar dieta. Tente novamente.'));
+
+            } else if (polls >= MAX_POLLS) {
+              clearInterval(interval);
+              stopLoadingTips();
+              reject(new Error('A geração demorou demais. Recarregue a página para verificar se sua dieta foi criada.'));
+            }
+            // pending/processing → continua polling
+
+          } catch (err) {
+            clearInterval(interval);
+            stopLoadingTips();
+            reject(err);
+          }
+        }, POLL_INTERVAL);
+      });
+    }
+
     async function loadDiet() {
       const generate = new URLSearchParams(window.location.search).get('generate');
 
       if (generate === '1') {
         const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
 
+        // 1. Envia anamnese pendente se houver
         const pending = sessionStorage.getItem('anamneseData');
         if (pending) {
           document.getElementById('loading-msg').textContent = 'Enviando questionário...';
@@ -1254,20 +1353,49 @@
           } catch { showError('Erro de conexão ao salvar questionário.'); return; }
         }
 
-        document.getElementById('loading-msg').textContent = 'Gerando sua dieta com IA...';
-        document.querySelector('.state-subtitle').textContent = 'Isso pode levar até 30 segundos. Não feche esta página.';
+        // 2. Inicia geração assíncrona
+        document.querySelector('.state-subtitle').textContent =
+          'A IA está preparando seu plano personalizado. Não feche esta página.';
+        startLoadingTips();
 
+        let jobId;
         try {
           const dr = await fetch(`${API_BASE}/diet/generate`, { method:'POST', headers, body:'{}' });
           if (!dr.ok) {
+            stopLoadingTips();
             const e = await dr.json().catch(() => ({}));
-            showError(e.error || 'Erro ao gerar dieta. Tente novamente.'); return;
+            showError(e.error || 'Erro ao iniciar geração. Tente novamente.');
+            return;
           }
-          renderDiet(await dr.json());
+          const jobData = await dr.json();
+          jobId = jobData.job_id;
+
+          // Modo síncrono (dev sem Redis): job já está done, busca direto
+          if (jobData.status === 'done' && jobData.diet_plan_id) {
+            stopLoadingTips();
+            const planRes = await fetch(`${API_BASE}/diet/${jobData.diet_plan_id}`, {
+              headers: { 'Authorization': `Bearer ${token}` },
+            });
+            renderDiet(await planRes.json());
+            history.replaceState(null, '', 'dieta.html');
+            return;
+          }
+
+        } catch (err) {
+          stopLoadingTips();
+          console.error(err);
+          showError('Erro de conexão ao iniciar geração. Tente novamente.');
+          return;
+        }
+
+        // 3. Polling assíncrono (prod com Redis)
+        try {
+          const diet = await pollJobStatus(jobId);
+          renderDiet(diet);
           history.replaceState(null, '', 'dieta.html');
         } catch (err) {
           console.error(err);
-          showError('A geração demorou demais ou houve erro de conexão. Tente recarregar a página.');
+          showError(err.message || 'Erro ao gerar dieta. Tente novamente.');
         }
 
       } else {

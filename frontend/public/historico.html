@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Histórico de Dietas — MyNutri AI</title>
+  <meta name="description" content="Veja todas as dietas geradas para você pelo MyNutri AI." />
+  <link rel="icon" type="image/png" href="/static/src/assets/mynutriai-logo.png" />
+  <link rel="stylesheet" href="/static/src/styles/index.css" />
+  <style>
+    body { background: var(--gray-50); min-height: 100vh; }
+
+    .history-page {
+      padding-top: calc(var(--header-h) + 48px);
+      padding-bottom: 72px;
+      animation: contentSlideIn .38s cubic-bezier(.16,1,.3,1) both;
+    }
+    @keyframes contentSlideIn {
+      from { opacity: 0; transform: translateY(14px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Page header ── */
+    .page-header {
+      margin-bottom: 32px;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 16px;
+    }
+    .page-header-left h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.75rem; font-weight: 700;
+      color: var(--gray-900); margin-bottom: 4px;
+    }
+    .page-header-left p { font-size: .9375rem; color: var(--gray-500); }
+    .btn-new-diet {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 11px 24px;
+      background: var(--gradient-primary);
+      color: #fff; border: none; border-radius: var(--radius-md);
+      font-size: .9375rem; font-weight: 600; cursor: pointer;
+      box-shadow: var(--shadow-green);
+      text-decoration: none;
+      transition: all var(--duration) var(--ease-out);
+    }
+    .btn-new-diet:hover { transform: translateY(-2px); box-shadow: 0 14px 35px -5px rgba(34,197,94,.45); }
+
+    /* ── States ── */
+    .state-center {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      min-height: 40vh; text-align: center; gap: 16px;
+    }
+    .spinner {
+      width: 44px; height: 44px;
+      border: 4px solid var(--green-200);
+      border-top-color: var(--green-500);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .state-title { font-family: 'Outfit', sans-serif; font-size: 1.125rem; font-weight: 600; color: var(--gray-700); }
+    .state-subtitle { font-size: .9375rem; color: var(--gray-500); max-width: 380px; }
+
+    /* ── History list ── */
+    .history-list {
+      display: flex; flex-direction: column; gap: 14px;
+    }
+
+    /* ── Diet card ── */
+    .diet-card {
+      background: var(--white);
+      border-radius: var(--radius-lg);
+      border: 1.5px solid var(--gray-100);
+      box-shadow: var(--shadow-sm);
+      padding: 20px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 20px; flex-wrap: wrap;
+      cursor: pointer;
+      text-decoration: none;
+      transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    }
+    .diet-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+      border-color: var(--green-200);
+    }
+    .diet-card-left { display: flex; align-items: center; gap: 16px; flex: 1; min-width: 0; }
+
+    .diet-icon {
+      width: 46px; height: 46px; border-radius: var(--radius-md);
+      background: var(--green-50); color: var(--green-600);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .diet-info { min-width: 0; }
+    .diet-date {
+      font-size: .8125rem; color: var(--gray-400);
+      margin-bottom: 3px;
+    }
+    .diet-goal {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1rem; font-weight: 600;
+      color: var(--gray-800);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .diet-card-meta {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+    .meta-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 12px; border-radius: 999px;
+      font-size: .8125rem; font-weight: 600;
+      background: var(--gray-100); color: var(--gray-600);
+    }
+    .meta-pill.calories { background: var(--green-50); color: var(--green-700); }
+    .meta-pill.protein  { background: #dcfce7; color: #15803d; }
+    .meta-pill.carbs    { background: #fef9c3; color: #854d0e; }
+    .meta-pill.fat      { background: #dbeafe; color: #1d4ed8; }
+
+    .diet-card-arrow {
+      color: var(--gray-300); flex-shrink: 0;
+      transition: color .18s ease, transform .18s ease;
+    }
+    .diet-card:hover .diet-card-arrow { color: var(--green-500); transform: translateX(3px); }
+
+    /* ── Count badge ── */
+    .count-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 14px; border-radius: 999px;
+      font-size: .8125rem; font-weight: 600;
+      background: var(--green-50); color: var(--green-700);
+      border: 1px solid var(--green-200);
+      margin-bottom: 24px;
+    }
+
+    /* ── Dark mode ── */
+    html.dark .diet-card { background: var(--bg-secondary); border-color: var(--border-color); }
+    html.dark .diet-goal { color: var(--text-primary); }
+    html.dark .diet-date { color: var(--text-secondary); }
+    html.dark .meta-pill { background: rgba(255,255,255,.08); color: var(--text-secondary); }
+    html.dark .meta-pill.calories { background: rgba(34,197,94,.12); color: #86efac; }
+    html.dark .meta-pill.protein  { background: rgba(34,197,94,.1);  color: #86efac; }
+    html.dark .meta-pill.carbs    { background: rgba(234,179,8,.1);  color: #fde047; }
+    html.dark .meta-pill.fat      { background: rgba(59,130,246,.1); color: #93c5fd; }
+    html.dark .diet-icon { background: rgba(34,197,94,.12); color: #86efac; }
+    html.dark .state-title { color: var(--text-primary); }
+    html.dark .state-subtitle { color: var(--text-secondary); }
+    html.dark .page-header-left h1 { color: var(--text-primary); }
+    html.dark .page-header-left p { color: var(--text-secondary); }
+  </style>
+</head>
+<body>
+
+  <!-- ===================== HEADER ===================== -->
+  <header class="header scrolled" id="header">
+    <div class="container header-inner">
+      <a href="/" class="logo">
+        <img src="/static/src/assets/mynutriai-logo.png" alt="MyNutri AI" />
+        MyNutri <span>AI</span>
+      </a>
+
+      <!-- Dark Mode Toggle -->
+      <button class="theme-toggle" id="theme-toggle" aria-label="Alternar tema escuro" title="Alternar tema">
+        <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+        <svg class="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+      </button>
+
+      <div class="user-menu-wrap">
+        <button class="user-menu-btn" id="userMenuBtn">
+          <div class="user-avatar" id="navAvatar">?</div>
+          <span id="navName">Carregando…</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+
+        <div class="user-dropdown" id="userDropdown">
+          <div class="dropdown-header">
+            <strong id="dropdownName">—</strong>
+            <span id="dropdownEmail">—</span>
+          </div>
+          <a href="/perfil/" class="dropdown-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+            Meu Perfil
+          </a>
+          <a href="/dieta/" class="dropdown-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v4H3zM3 10h18v4H3zM3 17h18v4H3z"/></svg>
+            Minha Dieta
+          </a>
+          <a href="/historico/" class="dropdown-item active">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+            Histórico
+          </a>
+          <div class="dropdown-divider"></div>
+          <button class="dropdown-item danger" id="logoutBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Sair
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===================== MAIN ===================== -->
+  <main class="history-page">
+    <div class="container" style="max-width: 820px;">
+
+      <!-- Page header -->
+      <div class="page-header">
+        <div class="page-header-left">
+          <h1>Histórico de Dietas</h1>
+          <p>Todos os planos alimentares gerados para você.</p>
+        </div>
+        <a href="/questionario/" class="btn-new-diet">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nova Dieta
+        </a>
+      </div>
+
+      <!-- Loading -->
+      <div class="state-center" id="stateLoading">
+        <div class="spinner"></div>
+        <p class="state-title">Carregando histórico…</p>
+      </div>
+
+      <!-- Empty -->
+      <div class="state-center" id="stateEmpty" style="display:none;">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--gray-300)"><path d="M3 3h18v4H3zM3 10h18v4H3zM3 17h18v4H3z"/></svg>
+        <p class="state-title">Nenhuma dieta gerada ainda</p>
+        <p class="state-subtitle">Responda o questionário para que a IA crie o seu plano alimentar personalizado.</p>
+        <a href="/questionario/" class="btn-new-diet" style="margin-top:8px;">Criar minha primeira dieta</a>
+      </div>
+
+      <!-- Error -->
+      <div class="state-center" id="stateError" style="display:none;">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:#f87171"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <p class="state-title">Não foi possível carregar</p>
+        <p class="state-subtitle" id="errorMsg">Tente novamente em alguns instantes.</p>
+        <button onclick="loadHistory()" class="btn-new-diet" style="margin-top:8px;">Tentar novamente</button>
+      </div>
+
+      <!-- List -->
+      <div id="stateList" style="display:none;">
+        <div class="count-badge" id="countBadge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+          <span id="countText">— dietas</span>
+        </div>
+        <div class="history-list" id="historyList"></div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    // --- Dark Mode System ---
+    (function() {
+      const THEME_KEY = 'mynutri_theme';
+      const html = document.documentElement;
+      const themeToggle = document.getElementById('theme-toggle');
+
+      function initializeTheme() {
+        const saved = localStorage.getItem(THEME_KEY);
+        if (saved) {
+          setTheme(saved);
+        } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+          setTheme('dark');
+        } else {
+          setTheme('light');
+        }
+      }
+
+      function setTheme(theme) {
+        if (theme === 'dark') {
+          html.classList.add('dark');
+          localStorage.setItem(THEME_KEY, 'dark');
+        } else {
+          html.classList.remove('dark');
+          localStorage.setItem(THEME_KEY, 'light');
+        }
+      }
+
+      initializeTheme();
+      if (themeToggle) themeToggle.addEventListener('click', () => {
+        setTheme(html.classList.contains('dark') ? 'light' : 'dark');
+      });
+
+      if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+          if (!localStorage.getItem(THEME_KEY)) setTheme(e.matches ? 'dark' : 'light');
+        });
+      }
+    })();
+
+    const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      ? 'http://127.0.0.1:8000/api/v1'
+      : '/api/v1';
+
+    /* ── Auth guard ── */
+    const token = localStorage.getItem('mynutri_token');
+    const userData = JSON.parse(localStorage.getItem('mynutri_user') || 'null');
+
+    if (!token) {
+      window.location.href = '/auth/';
+    }
+
+    /* ── Navbar ── */
+    const navAvatar    = document.getElementById('navAvatar');
+    const navName      = document.getElementById('navName');
+    const dropdownName  = document.getElementById('dropdownName');
+    const dropdownEmail = document.getElementById('dropdownEmail');
+
+    if (userData) {
+      const initials = (userData.nome || userData.email || '?')[0].toUpperCase();
+      navAvatar.textContent    = initials;
+      navName.textContent      = userData.nome || userData.email;
+      dropdownName.textContent  = userData.nome || '—';
+      dropdownEmail.textContent = userData.email || '—';
+    }
+
+    document.getElementById('userMenuBtn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.getElementById('userDropdown').classList.toggle('open');
+    });
+    document.addEventListener('click', () => {
+      document.getElementById('userDropdown').classList.remove('open');
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      localStorage.removeItem('mynutri_token');
+      localStorage.removeItem('mynutri_refresh');
+      localStorage.removeItem('mynutri_user');
+      window.location.href = '/auth/';
+    });
+
+    /* ── Helpers ── */
+    function show(id)    { document.getElementById(id).style.display = ''; }
+    function hide(id)    { document.getElementById(id).style.display = 'none'; }
+    function showFlex(id){ document.getElementById(id).style.display = 'flex'; }
+
+    function formatDate(iso) {
+      const d = new Date(iso);
+      return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+    }
+
+    function goalLabel(raw) {
+      if (!raw) return 'Plano alimentar';
+      const lower = raw.toLowerCase();
+      if (lower.includes('emagrecimento') || lower.includes('perda') || lower.includes('loss')) return 'Emagrecimento';
+      if (lower.includes('ganho') || lower.includes('hipertrofia') || lower.includes('gain'))   return 'Ganho de Massa';
+      if (lower.includes('manutenção') || lower.includes('manutencao') || lower.includes('maintain')) return 'Manutenção';
+      return raw;
+    }
+
+    /* ── Load history ── */
+    async function loadHistory() {
+      hide('stateEmpty');
+      hide('stateError');
+      hide('stateList');
+      showFlex('stateLoading');
+
+      try {
+        const res = await fetch(`${API_BASE}/diet/list`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (res.status === 401) {
+          window.location.href = '/auth/';
+          return;
+        }
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const plans = await res.json();
+        hide('stateLoading');
+
+        if (!plans.length) {
+          showFlex('stateEmpty');
+          return;
+        }
+
+        // Atualiza contador
+        const count = plans.length;
+        document.getElementById('countText').textContent = `${count} ${count === 1 ? 'dieta gerada' : 'dietas geradas'}`;
+
+        // Renderiza cards
+        const list = document.getElementById('historyList');
+        list.innerHTML = '';
+
+        plans.forEach((plan) => {
+          const macros = plan.macros || {};
+          const card = document.createElement('a');
+          card.href = `/dieta/?id=${plan.id}`;
+          card.className = 'diet-card';
+          card.setAttribute('aria-label', `Ver dieta de ${formatDate(plan.created_at)}`);
+
+          card.innerHTML = `
+            <div class="diet-card-left">
+              <div class="diet-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 3h18v4H3zM3 10h18v4H3zM3 17h18v4H3z"/>
+                </svg>
+              </div>
+              <div class="diet-info">
+                <div class="diet-date">${formatDate(plan.created_at)}</div>
+                <div class="diet-goal">${goalLabel(plan.goal_description)}</div>
+              </div>
+            </div>
+
+            <div class="diet-card-meta">
+              ${plan.calorias_totais ? `<span class="meta-pill calories">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                ${plan.calorias_totais} kcal
+              </span>` : ''}
+              ${macros.protein_g ? `<span class="meta-pill protein">${macros.protein_g}g prot</span>` : ''}
+              ${macros.carbs_g   ? `<span class="meta-pill carbs">${macros.carbs_g}g carb</span>`   : ''}
+              ${macros.fat_g     ? `<span class="meta-pill fat">${macros.fat_g}g gord</span>`       : ''}
+            </div>
+
+            <svg class="diet-card-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          `;
+
+          list.appendChild(card);
+        });
+
+        show('stateList');
+
+      } catch (err) {
+        hide('stateLoading');
+        document.getElementById('errorMsg').textContent = `Erro ao carregar: ${err.message}`;
+        showFlex('stateError');
+      }
+    }
+
+    loadHistory();
+  </script>
+</body>
+</html>

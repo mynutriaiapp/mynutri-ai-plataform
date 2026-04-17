@@ -313,13 +313,10 @@ class TestDietGenerate:
         response = api_client.post('/api/v1/diet/generate', format='json')
         assert response.status_code == 401
 
-    @patch('nutrition.api_views.AIService')
-    def test_gerar_dieta_sucesso(self, mock_service_cls, auth_client, create_anamnese):
+    @patch('nutrition.services.AIService.generate_diet')
+    def test_gerar_dieta_sucesso(self, mock_generate, auth_client, create_anamnese):
         client, user = auth_client
         create_anamnese(user=user)
-
-        mock_instance = MagicMock()
-        mock_service_cls.return_value = mock_instance
 
         diet_plan = DietPlan.objects.create(
             user=user,
@@ -327,28 +324,16 @@ class TestDietGenerate:
             total_calories=1800,
             goal_description='Emagrecimento saudável',
         )
-        for idx, meal_data in enumerate(FAKE_AI_RESPONSE['meals']):
-            Meal.objects.create(
-                diet_plan=diet_plan,
-                meal_name=meal_data['name'],
-                description='',
-                calories=sum(f['calories'] for f in meal_data['foods']),
-                order=idx,
-            )
-        mock_instance.generate_diet.return_value = diet_plan
+        mock_generate.return_value = diet_plan
 
         response = client.post('/api/v1/diet/generate', format='json')
-        assert response.status_code == 201
-        assert 'calorias_totais' in response.data
-        assert response.data['calorias_totais'] == 1800
+        assert response.status_code == 202
+        assert 'job_id' in response.data
 
-    @patch('nutrition.api_views.AIService')
-    def test_gerar_dieta_retorna_refeicoes(self, mock_service_cls, auth_client, create_anamnese):
+    @patch('nutrition.services.AIService.generate_diet')
+    def test_gerar_dieta_retorna_refeicoes(self, mock_generate, auth_client, create_anamnese):
         client, user = auth_client
         create_anamnese(user=user)
-
-        mock_instance = MagicMock()
-        mock_service_cls.return_value = mock_instance
 
         diet_plan = DietPlan.objects.create(
             user=user,
@@ -364,34 +349,30 @@ class TestDietGenerate:
                 calories=sum(f['calories'] for f in meal_data['foods']),
                 order=idx,
             )
-        mock_instance.generate_diet.return_value = diet_plan
+        mock_generate.return_value = diet_plan
 
-        response = client.post('/api/v1/diet/generate', format='json')
-        assert response.status_code == 201
-        assert len(response.data['refeicoes']) == 5
+        client.post('/api/v1/diet/generate', format='json')
+        assert Meal.objects.filter(diet_plan=diet_plan).count() == 5
 
-    @patch('nutrition.api_views.AIService')
-    def test_gerar_dieta_falha_ia_retorna_500(self, mock_service_cls, auth_client, create_anamnese):
+    @patch('nutrition.services.AIService.generate_diet')
+    def test_gerar_dieta_falha_ia_job_marcado_como_falha(self, mock_generate, auth_client, create_anamnese):
+        from nutrition.models import DietJob
         client, user = auth_client
         create_anamnese(user=user)
-
-        mock_instance = MagicMock()
-        mock_service_cls.return_value = mock_instance
-        mock_instance.generate_diet.side_effect = Exception('Falha de conexão com a IA')
+        mock_generate.side_effect = Exception('Falha de conexão com a IA')
 
         response = client.post('/api/v1/diet/generate', format='json')
-        assert response.status_code == 500
-        assert 'error' in response.data
+        assert response.status_code == 202
 
-    @patch('nutrition.api_views.AIService')
-    def test_gerar_dieta_usa_anamnese_mais_recente(self, mock_service_cls, auth_client, create_anamnese):
+        job = DietJob.objects.get(pk=response.data['job_id'])
+        assert job.status == DietJob.STATUS_FAILED
+
+    @patch('nutrition.services.AIService.generate_diet')
+    def test_gerar_dieta_usa_anamnese_mais_recente(self, mock_generate, auth_client, create_anamnese):
         """Deve usar a anamnese mais recente, não a mais antiga."""
         client, user = auth_client
         create_anamnese(user=user, goal='lose')
         create_anamnese(user=user, goal='gain')  # mais recente
-
-        mock_instance = MagicMock()
-        mock_service_cls.return_value = mock_instance
 
         diet_plan = DietPlan.objects.create(
             user=user,
@@ -399,12 +380,11 @@ class TestDietGenerate:
             total_calories=1800,
             goal_description='Hipertrofia',
         )
-        mock_instance.generate_diet.return_value = diet_plan
+        mock_generate.return_value = diet_plan
 
         client.post('/api/v1/diet/generate', format='json')
 
-        # Verifica que a anamnese passada para a IA era a mais recente
-        call_args = mock_instance.generate_diet.call_args
+        call_args = mock_generate.call_args
         anamnese_usada = call_args[0][0]
         assert anamnese_usada.goal == 'gain'
 

@@ -15,7 +15,20 @@
       "Bash(grep -E \"staticfiles|db.sqlite3|.env$\" .gitignore)",
       "Bash(python -c ':*)",
       "Bash(cat)",
-      "Bash(chmod +x /tmp/update_html_darkmode.sh)"
+      "Bash(chmod +x /tmp/update_html_darkmode.sh)",
+      "Bash(xargs grep *)",
+      "Bash(grep -rn \"Histórico\" \"c:/Users/gabri/OneDrive/Área de Trabalho/mynutri-ai-plataform/frontend/public/\"*.html)",
+      "Bash(pip install *)",
+      "Bash(python manage.py makemigrations nutrition --settings=mynutri.test_settings)",
+      "Bash(python manage.py check --settings=mynutri.test_settings)",
+      "Bash(python -m pytest user/ nutrition/ -x -q --tb=short)",
+      "Bash(python manage.py showmigrations nutrition)",
+      "Bash(pytest nutrition/ -x -q)",
+      "Bash(python -m pytest nutrition/ -q --tb=short)",
+      "Bash(python -m pytest -q --tb=short)",
+      "Bash(python -m pytest -v --tb=short)",
+      "Bash(python -m pytest nutrition/ -v --co -q)",
+      "Bash(python -m pytest --collect-only -q)"
     ]
   }
 }

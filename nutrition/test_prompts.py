@@ -7,7 +7,12 @@ Estes são testes puramente unitários — sem banco de dados.
 import pytest
 from unittest.mock import MagicMock
 
-from nutrition.prompts import calculate_calories, build_diet_prompt, SYSTEM_PROMPT
+from nutrition.prompts import (
+    calculate_calories,
+    build_food_selection_prompt as build_diet_prompt,
+    build_explanation_prompt,
+    SYSTEM_PROMPT_FOODS as SYSTEM_PROMPT,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -239,14 +244,21 @@ class TestBuildDietPrompt:
     def test_prompt_placeholder_sem_alergias(self):
         anamnese = _make_anamnese(allergies='')
         prompt = build_diet_prompt(anamnese)
-        assert 'Nenhum item a evitar informado' in prompt
+        assert 'Nenhum item a evitar' in prompt
 
-    def test_prompt_contem_tmb_e_tdee(self):
+    def test_prompt_contem_tmb_e_tdee_na_explicacao(self):
+        """TMB e TDEE ficam no prompt de explicação (Passo 2), não no de seleção de alimentos."""
         anamnese = _make_anamnese(weight=75, height=175, age=25, gender='M', activity='moderate', goal='lose')
-        tmb, tdee, _ = calculate_calories(anamnese)
-        prompt = build_diet_prompt(anamnese)
-        assert str(tmb) in prompt
-        assert str(tdee) in prompt
+        tmb, tdee, target = calculate_calories(anamnese)
+        diet_data = {
+            'calories': target,
+            'macros': {'protein_g': 150, 'carbs_g': 230, 'fat_g': 60},
+            'meals': [{'name': 'Almoço', 'time_suggestion': '12:00', 'foods': []}],
+            'goal_description': 'Emagrecimento',
+        }
+        expl_prompt = build_explanation_prompt(diet_data, anamnese, tmb, tdee, target)
+        assert str(tmb) in expl_prompt
+        assert str(tdee) in expl_prompt
 
 
 # ---------------------------------------------------------------------------

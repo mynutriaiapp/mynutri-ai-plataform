@@ -57,6 +57,66 @@ services:
       - key: LOG_LEVEL
         value: "WARNING"
 
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: mynutri-redis
+          type: redis
+          property: connectionString
+
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: mynutri-redis
+          type: redis
+          property: connectionString
+
+  # ---------------------------------------------------------------------------
+  # Celery Worker — processa geração de dietas em background
+  # ---------------------------------------------------------------------------
+  - type: worker
+    name: mynutri-celery-worker
+    runtime: python
+    region: ohio
+    plan: free
+
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "celery -A mynutri worker --loglevel=info --concurrency=2 --without-heartbeat"
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.0"
+
+      - key: SECRET_KEY
+        fromService:
+          name: mynutri-ai-api
+          type: web
+          envVarKey: SECRET_KEY
+
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mynutri-db
+          property: connectionString
+
+      - key: AI_API_KEY
+        sync: false
+
+      - key: AI_API_URL
+        sync: false
+
+      - key: AI_MODEL
+        value: "gpt-3.5-turbo"
+
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: mynutri-redis
+          type: redis
+          property: connectionString
+
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: mynutri-redis
+          type: redis
+          property: connectionString
+
   # ---------------------------------------------------------------------------
   # PostgreSQL — banco de dados gerenciado pelo Render
   # ---------------------------------------------------------------------------
@@ -66,3 +126,10 @@ databases:
     user: mynutri
     region: ohio
     plan: free              # free tier: 90 dias; troque por "starter" para produção
+
+  # Redis — broker do Celery e cache da aplicação
+  - name: mynutri-redis
+    type: redis
+    region: ohio
+    plan: free
+    maxmemoryPolicy: allkeys-lru

@@ -1,83 +1,100 @@
+"""
+Arquitetura de dois passos para geração de dietas:
+
+  Passo 1 — LLM (temp=0.3): seleciona alimentos e quantidades (sem macros)
+  Backend:  consulta nutrition_db.py e calcula macros deterministicamente
+  Passo 2 — LLM (temp=0.7): escreve explicação usando os valores calculados
+
+Isso elimina a variabilidade de macros causada por delegar aritmética ao modelo.
+"""
+
 import json
-import os
 import logging
-import urllib.request
+import os
 import urllib.error
+import urllib.request
 
 from .models import Anamnese, DietPlan, Meal
-from .prompts import SYSTEM_PROMPT, build_diet_prompt, calculate_calories
+from .nutrition_db import lookup_food_nutrition
+from .prompts import (
+    SYSTEM_PROMPT_EXPLANATION,
+    SYSTEM_PROMPT_FOODS,
+    build_explanation_prompt,
+    build_food_selection_prompt,
+    calculate_calories,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class AIService:
     """
-    Responsável por chamar a API de IA e transformar a resposta
-    em registros de DietPlan e Meal no banco de dados.
+    Orquestra a geração de dieta em dois passos via API compatível com OpenAI.
 
-    Usa as variáveis de ambiente:
-        AI_API_KEY  → chave de autenticação da IA
-        AI_API_URL  → endpoint da API (ex: OpenAI, Gemini, etc.)
+    Variáveis de ambiente:
+        AI_API_KEY  → chave de autenticação
+        AI_API_URL  → endpoint (ex: https://api.openai.com/v1/chat/completions)
+        AI_MODEL    → modelo (padrão: gpt-4o-mini)
     """
 
     def __init__(self):
         self.api_key = os.getenv('AI_API_KEY', '')
         self.api_url = os.getenv('AI_API_URL', '')
+        self.model   = os.getenv('AI_MODEL', 'gpt-4o-mini')
 
-    def _build_prompt(self, anamnese: Anamnese) -> str:
-        return build_diet_prompt(anamnese)
+    # ──────────────────────────────────────────────────────────────────────────
+    #  HTTP
+    # ──────────────────────────────────────────────────────────────────────────
 
-    def _call_api(self, prompt: str) -> dict:
-        """
-        Realiza a chamada HTTP à API de IA.
-        Suporta qualquer API compatível com o formato OpenAI Chat Completions.
-        """
+    def _call_api(
+        self,
+        user_prompt: str,
+        system_prompt: str,
+        temperature: float = 0.3,
+        json_mode: bool = True,
+    ) -> dict:
+        """Realiza chamada à API de IA (formato OpenAI Chat Completions)."""
         if not self.api_key or not self.api_url:
-            raise ValueError(
-                'AI_API_KEY e AI_API_URL devem estar configurados no arquivo .env'
-            )
+            raise ValueError('AI_API_KEY e AI_API_URL devem estar configurados no .env')
 
-        payload = json.dumps({
-            'model': os.getenv('AI_MODEL', 'gpt-3.5-turbo'),
-            'messages': [
-                {'role': 'system', 'content': SYSTEM_PROMPT},
-                {'role': 'user', 'content': prompt},
+        body: dict = {
+            'model':       self.model,
+            'messages':    [
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user',   'content': user_prompt},
             ],
-            'temperature': 0.6,
-        }).encode('utf-8')
+            'temperature': temperature,
+        }
+        if json_mode:
+            body['response_format'] = {'type': 'json_object'}
 
+        payload = json.dumps(body).encode('utf-8')
         req = urllib.request.Request(
             self.api_url,
             data=payload,
             headers={
-                'Content-Type': 'application/json',
+                'Content-Type':  'application/json',
                 'Authorization': f'Bearer {self.api_key}',
             },
             method='POST',
         )
 
         with urllib.request.urlopen(req, timeout=120) as response:
-            raw = response.read().decode('utf-8')
-            return json.loads(raw)
+            return json.loads(response.read().decode('utf-8'))
 
     def _parse_response(self, api_response: dict) -> dict:
-        """
-        Extrai o conteúdo JSON gerado pela IA da resposta da API.
-        Suporta o formato padrão OpenAI (choices[0].message.content).
-        Remove markdown code blocks (```json ... ```) caso a IA os inclua.
-        """
+        """Extrai e parseia o JSON gerado pela IA."""
         try:
             content = api_response['choices'][0]['message']['content']
         except (KeyError, IndexError) as e:
-            logger.error('Falha ao parsear resposta da IA: %s | Resposta: %s', e, api_response)
+            logger.error('Formato inesperado da API: %s | resposta: %s', e, api_response)
             raise ValueError('A IA retornou um formato inesperado. Tente novamente.')
 
-        # Remove markdown code fences: ```json\n...\n``` ou ```\n...\n```
         stripped = content.strip()
+        # Remove markdown code fences caso a API não suporte json_mode
         if stripped.startswith('```'):
             lines = stripped.split('\n')
-            # Remove primeira linha (```json ou ```) e última linha (```)
-            inner = lines[1:] if lines[-1].strip() == '```' else lines[1:]
+            inner = lines[1:]
             if inner and inner[-1].strip() == '```':
                 inner = inner[:-1]
             stripped = '\n'.join(inner)
@@ -85,87 +102,67 @@ class AIService:
         try:
             return json.loads(stripped)
         except json.JSONDecodeError as e:
-            logger.error('Falha ao parsear JSON da IA: %s | Conteúdo: %s', e, content[:200])
+            logger.error('JSON inválido da IA: %s | conteúdo: %.200s', e, content)
             raise ValueError('A IA retornou um formato inesperado. Tente novamente.')
 
-    def _normalize_diet_data(self, diet_data: dict) -> dict:
+    # ──────────────────────────────────────────────────────────────────────────
+    #  ENRIQUECIMENTO NUTRICIONAL (backend — determinístico)
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _enrich_foods_with_macros(self, diet_data: dict) -> dict:
         """
-        Recalcula os totais de calorias e macros somando os valores reais
-        de cada alimento (foods[]) em cada refeição (meals[]).
-
-        Garante consistência matemática independentemente do que a IA declarou
-        nos campos de nível superior ("calories", "macros").
-
-        Regra: a fonte da verdade são os alimentos individuais, não o total declarado.
+        Consulta o nutrition_db para cada alimento e atribui calorias e macros.
+        Também padroniza o campo 'quantity' para exibição no frontend.
         """
-        meals = diet_data.get('meals', [])
-
-        total_kcal = 0
-        total_protein = 0.0
-        total_carbs = 0.0
-        total_fat = 0.0
-        has_per_food_macros = False
-
-        for meal in meals:
+        for meal in diet_data.get('meals', []):
             for food in meal.get('foods', []):
-                total_kcal    += food.get('calories', 0) or 0
-                p = food.get('protein_g')
-                c = food.get('carbs_g')
-                f = food.get('fat_g')
-                if p is not None or c is not None or f is not None:
-                    has_per_food_macros = True
-                    total_protein += p or 0
-                    total_carbs   += c or 0
-                    total_fat     += f or 0
+                qty_g    = float(food.get('quantity_g') or 100)
+                qty_text = food.get('quantity_text', f'{qty_g:.0f}g')
 
-        declared_kcal = diet_data.get('calories') or 0
+                nutrition = lookup_food_nutrition(food.get('name', ''), qty_g)
+                food['calories']  = nutrition['calories']
+                food['protein_g'] = nutrition['protein_g']
+                food['carbs_g']   = nutrition['carbs_g']
+                food['fat_g']     = nutrition['fat_g']
 
-        if total_kcal > 0:
-            divergence = abs(total_kcal - declared_kcal) / declared_kcal if declared_kcal else 1
-            if divergence > 0.05:
-                logger.warning(
-                    'Inconsistência calórica corrigida: IA declarou %d kcal, '
-                    'soma real dos alimentos = %d kcal (divergência %.1f%%).',
-                    declared_kcal, total_kcal, divergence * 100,
-                )
-            # Sobrescreve sempre — a soma real é a fonte da verdade
-            diet_data['calories'] = total_kcal
-
-        if has_per_food_macros:
-            # Recalcula macros a partir dos alimentos individuais
-            diet_data['macros'] = {
-                'protein_g': round(total_protein),
-                'carbs_g':   round(total_carbs),
-                'fat_g':     round(total_fat),
-            }
-        elif diet_data.get('macros') and total_kcal > 0:
-            # Macros por alimento não informados: ajusta proporcionalmente
-            # se a IA declarou macros mas as calorias divergem.
-            macros = diet_data['macros']
-            macro_kcal = (
-                (macros.get('protein_g', 0) or 0) * 4 +
-                (macros.get('carbs_g',   0) or 0) * 4 +
-                (macros.get('fat_g',     0) or 0) * 9
-            )
-            if macro_kcal > 0 and abs(macro_kcal - total_kcal) / total_kcal > 0.05:
-                scale = total_kcal / macro_kcal
-                diet_data['macros'] = {
-                    'protein_g': round((macros.get('protein_g', 0) or 0) * scale),
-                    'carbs_g':   round((macros.get('carbs_g',   0) or 0) * scale),
-                    'fat_g':     round((macros.get('fat_g',     0) or 0) * scale),
-                }
+                # Campo 'quantity' usado pelo frontend (combina texto + gramas)
+                qty_g_int = round(qty_g)
+                if str(qty_g_int) in qty_text or f'{qty_g_int}g' in qty_text:
+                    food['quantity'] = qty_text
+                else:
+                    food['quantity'] = f'{qty_text} ({qty_g_int}g)'
 
         return diet_data
 
-    def _enforce_calorie_target(self, diet_data: dict, target_calories: int) -> dict:
+    def _recalculate_totals(self, diet_data: dict) -> dict:
+        """Recalcula macros e calorias totais somando os alimentos individuais."""
+        total_cal  = 0
+        total_prot = 0.0
+        total_carb = 0.0
+        total_fat  = 0.0
+
+        for meal in diet_data.get('meals', []):
+            for food in meal.get('foods', []):
+                total_cal  += food.get('calories',  0) or 0
+                total_prot += food.get('protein_g', 0) or 0
+                total_carb += food.get('carbs_g',   0) or 0
+                total_fat  += food.get('fat_g',     0) or 0
+
+        diet_data['calories'] = total_cal
+        diet_data['macros']   = {
+            'protein_g': round(total_prot),
+            'carbs_g':   round(total_carb),
+            'fat_g':     round(total_fat),
+        }
+        return diet_data
+
+    def _adjust_to_calorie_target(self, diet_data: dict, target_calories: int) -> dict:
         """
-        Garante que as calorias totais do plano batem com o alvo calculado pelo backend.
+        Se o total calculado divergir mais de 10% do alvo, escala quantity_g
+        de todos os alimentos proporcionalmente e recalcula os macros.
 
-        Se a IA gerou um total fora de ±10% do alvo, escala proporcionalmente os valores
-        calóricos e de macros de TODOS os alimentos para corrigir o desvio.
-
-        As quantidades em texto (ex: "120g", "2 unidades") não são alteradas — apenas os
-        números de calorias e macros, que a IA aproxima de qualquer forma.
+        Escalar quantity_g (e não só as calorias) mantém a consistência entre
+        os valores nutricionais e as quantidades exibidas para o usuário.
         """
         actual = diet_data.get('calories', 0)
         if not actual or not target_calories:
@@ -177,100 +174,172 @@ class AIService:
 
         scale = target_calories / actual
         logger.warning(
-            'Calorias geradas pela IA (%d kcal) divergem %.1f%% do alvo (%d kcal). '
-            'Escalando todos os alimentos por fator %.4f.',
+            'Total calculado (%d kcal) diverge %.1f%% do alvo (%d kcal). '
+            'Escalando quantity_g por fator %.4f.',
             actual, divergence * 100, target_calories, scale,
         )
 
         for meal in diet_data.get('meals', []):
             for food in meal.get('foods', []):
-                if food.get('calories') is not None:
-                    food['calories'] = round(food['calories'] * scale)
-                for macro in ('protein_g', 'carbs_g', 'fat_g'):
-                    if food.get(macro) is not None:
-                        food[macro] = round(food[macro] * scale, 1)
+                old_qty = float(food.get('quantity_g') or 100)
+                new_qty = round(old_qty * scale)
+                food['quantity_g'] = new_qty
 
-        # Re-normaliza para recalcular os campos de nível superior com os valores escalados
-        return self._normalize_diet_data(diet_data)
+                # Atualiza o campo de exibição com a nova quantidade em gramas
+                qty_text = food.get('quantity_text', '')
+                food['quantity'] = f'{qty_text} ({new_qty}g)' if qty_text else f'{new_qty}g'
+
+                # Recalcula macros para a nova quantidade
+                nutrition = lookup_food_nutrition(food.get('name', ''), new_qty)
+                food['calories']  = nutrition['calories']
+                food['protein_g'] = nutrition['protein_g']
+                food['carbs_g']   = nutrition['carbs_g']
+                food['fat_g']     = nutrition['fat_g']
+
+        return self._recalculate_totals(diet_data)
+
+    # ──────────────────────────────────────────────────────────────────────────
+    #  PASSO 2 — EXPLICAÇÃO (chamada separada, falha silenciosamente)
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _generate_explanation(
+        self,
+        diet_data: dict,
+        anamnese: Anamnese,
+        tmb: int,
+        tdee: int,
+        target_calories: int,
+    ) -> dict | None:
+        """
+        Gera o objeto 'explanation' em chamada separada com temperature mais alta.
+        Retorna None se falhar — a explicação é opcional e o frontend tem fallback.
+        """
+        prompt = build_explanation_prompt(diet_data, anamnese, tmb, tdee, target_calories)
+        try:
+            raw = self._call_api(
+                prompt,
+                system_prompt=SYSTEM_PROMPT_EXPLANATION,
+                temperature=0.7,
+                json_mode=True,
+            )
+            explanation = self._parse_response(raw)
+            # Valida que os 5 campos obrigatórios existem
+            required = {'calorie_calculation', 'macro_distribution', 'food_choices',
+                        'meal_structure', 'goal_alignment'}
+            if not required.issubset(explanation.keys()):
+                logger.warning('Explanation incompleta: campos faltando. Ignorando.')
+                return None
+            return explanation
+        except Exception as exc:
+            logger.warning('Falha ao gerar explanation (não crítico): %s', exc)
+            return None
+
+    # ──────────────────────────────────────────────────────────────────────────
+    #  MÉTODO PRINCIPAL
+    # ──────────────────────────────────────────────────────────────────────────
 
     def generate_diet(self, anamnese: Anamnese) -> DietPlan:
         """
-        Método principal: monta o prompt, chama a IA, parseia JSON e
-        persiste DietPlan + Meals no banco de dados.
+        Gera e persiste um DietPlan completo.
 
-        Returns:
-            DietPlan: objeto criado no banco com todas as refeições.
-
-        Raises:
-            ValueError: se a IA estiver mal configurada ou retornar formato inválido.
-            Exception: se a chamada HTTP falhar.
+        Fluxo:
+          1. Backend calcula alvo calórico (Mifflin-St Jeor)
+          2. LLM Passo 1 (temp=0.3): seleciona alimentos + quantidades
+          3. Backend: enriquece com macros do nutrition_db (determinístico)
+          4. Backend: ajusta porções se divergência > 10%
+          5. LLM Passo 2 (temp=0.7): gera explicação de transparência
+          6. Persiste DietPlan + Meals no banco
         """
-        # Calcula o alvo calórico no backend antes de chamar a IA
-        _tmb, _tdee, target_calories = calculate_calories(anamnese)
+        tmb, tdee, target_calories = calculate_calories(anamnese)
         logger.info(
             'Alvo calórico para usuário %s: TMB=%d, TDEE=%d, meta=%d kcal (objetivo: %s)',
-            anamnese.user_id, _tmb, _tdee, target_calories, anamnese.goal,
+            anamnese.user_id, tmb, tdee, target_calories, anamnese.goal,
         )
 
-        prompt = self._build_prompt(anamnese)
-        logger.info('Gerando dieta para usuário %s via IA...', anamnese.user_id)
+        # ── Passo 1: seleção de alimentos ────────────────────────────────────
+        prompt = build_food_selection_prompt(anamnese)
+        logger.info('Passo 1 — chamando IA para seleção de alimentos (usuário %s)...', anamnese.user_id)
 
         try:
-            raw_response = self._call_api(prompt)
+            raw_response = self._call_api(
+                prompt,
+                system_prompt=SYSTEM_PROMPT_FOODS,
+                temperature=0.3,
+                json_mode=True,
+            )
         except urllib.error.HTTPError as e:
-            logger.error('Erro HTTP na chamada à IA: %s', e)
+            logger.error('Erro HTTP na chamada à IA (Passo 1): %s', e)
             raise Exception(f'Falha ao contatar a API da IA: HTTP {e.code}')
         except Exception as e:
-            logger.error('Erro inesperado na chamada à IA: %s', e)
-            raise Exception('Falha ao gerar o plano alimentar via IA, tente novamente mais tarde.')
+            logger.error('Erro na chamada à IA (Passo 1): %s', e)
+            raise Exception('Falha ao gerar o plano alimentar. Tente novamente.')
 
         diet_data = self._parse_response(raw_response)
-        diet_data = self._normalize_diet_data(diet_data)
-        diet_data = self._enforce_calorie_target(diet_data, target_calories)
 
-        # Persiste o DietPlan com o JSON bruto completo (já normalizado)
+        if 'meals' not in diet_data or not diet_data['meals']:
+            raise ValueError('A IA não retornou refeições válidas. Tente novamente.')
+
+        # ── Backend: enriquece com macros do banco nutricional ────────────────
+        logger.info('Calculando macros via banco nutricional para usuário %s...', anamnese.user_id)
+        diet_data = self._enrich_foods_with_macros(diet_data)
+        diet_data = self._recalculate_totals(diet_data)
+        diet_data = self._adjust_to_calorie_target(diet_data, target_calories)
+
+        logger.info(
+            'Macros calculados: %d kcal | P=%dg | C=%dg | G=%dg (alvo: %d kcal)',
+            diet_data.get('calories', 0),
+            diet_data.get('macros', {}).get('protein_g', 0),
+            diet_data.get('macros', {}).get('carbs_g', 0),
+            diet_data.get('macros', {}).get('fat_g', 0),
+            target_calories,
+        )
+
+        # ── Passo 2: explicação (falha silenciosa) ────────────────────────────
+        logger.info('Passo 2 — gerando explicação de transparência...')
+        explanation = self._generate_explanation(diet_data, anamnese, tmb, tdee, target_calories)
+        diet_data['explanation'] = explanation
+
+        # ── Persiste DietPlan ─────────────────────────────────────────────────
         diet_plan = DietPlan.objects.create(
             user=anamnese.user,
             anamnese=anamnese,
             raw_response=diet_data,
             total_calories=diet_data.get('calories'),
-            goal_description=diet_data.get('goal_description') or diet_data.get('notes', ''),
+            goal_description=diet_data.get('goal_description', ''),
         )
 
-        # Persiste cada refeição individualmente
-        # Novo formato: meals[].foods[] — monta descrição a partir dos alimentos
+        # ── Persiste Meals ────────────────────────────────────────────────────
         meals_to_create = []
         for idx, meal in enumerate(diet_data.get('meals', [])):
             foods = meal.get('foods', [])
-            # Monta descrição rica: cada alimento em linha separada com quantidade
+
             food_lines = [
-                f'• {f.get("name", "")} — {f.get("quantity", "")}'
-                for f in foods
-                if f.get('name')
+                f'• {f.get("name", "")} — {f.get("quantity", f.get("quantity_text", ""))}'
+                for f in foods if f.get('name')
             ]
             description = '\n'.join(food_lines) if food_lines else ', '.join(
-                f'{f.get("name", "")} ({f.get("quantity", "")})'
-                for f in foods
+                f.get('name', '') for f in foods
             )
-            total_meal_calories = sum(f.get('calories', 0) for f in foods)
-            # Inclui horário sugerido no nome da refeição se disponível
-            meal_name = meal.get('name', '')
+
+            meal_kcal = sum(f.get('calories', 0) for f in foods)
+
+            meal_name = meal.get('name', f'Refeição {idx + 1}')
             time_suggestion = meal.get('time_suggestion', '')
             if time_suggestion:
                 meal_name = f'{meal_name} ({time_suggestion})'
-            meals_to_create.append(
-                Meal(
-                    diet_plan=diet_plan,
-                    meal_name=meal_name,
-                    description=description,
-                    calories=total_meal_calories,
-                    order=idx,
-                )
-            )
+
+            meals_to_create.append(Meal(
+                diet_plan=diet_plan,
+                meal_name=meal_name,
+                description=description,
+                calories=meal_kcal,
+                order=idx,
+            ))
+
         Meal.objects.bulk_create(meals_to_create)
 
         logger.info(
-            'Dieta gerada com sucesso: DietPlan#%s (%d refeições, %s kcal)',
-            diet_plan.id, len(meals_to_create), diet_plan.total_calories
+            'DietPlan#%s criado: %d refeições, %d kcal (usuário %s)',
+            diet_plan.pk, len(meals_to_create), diet_plan.total_calories, anamnese.user_id,
         )
         return diet_plan

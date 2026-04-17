@@ -165,6 +165,7 @@ REST_FRAMEWORK = {
         'anon': '20/hour',
         'user': '60/hour',
         'diet_generate': '3/day',
+        'contact': '5/hour',
     },
 }
 
@@ -243,6 +244,44 @@ else:
 # Não é necessário declará-las aqui; basta configurar no .env.
 
 # =============================================================================
+# E-mail — Gmail SMTP via App Password (configure no .env)
+# Desenvolvimento: use EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+# Produção: preencha EMAIL_HOST_USER e EMAIL_HOST_PASSWORD com App Password do Gmail
+# Guia App Password: https://myaccount.google.com/apppasswords
+# =============================================================================
+EMAIL_BACKEND = os.getenv(
+    'EMAIL_BACKEND',
+    'django.core.mail.backends.smtp.EmailBackend' if not DEBUG
+    else 'django.core.mail.backends.console.EmailBackend',
+)
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'False').lower() in ('true', '1', 'yes')
+EMAIL_USE_TLS = not EMAIL_USE_SSL  # mutuamente exclusivos: SSL=465, TLS=587
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.getenv('EMAIL_HOST_USER', 'mynutriai.app@gmail.com')
+CONTACT_EMAIL = os.getenv('CONTACT_EMAIL', 'mynutriai.app@gmail.com')
+
+# =============================================================================
+# Celery
+# Dev (sem Redis): CELERY_TASK_ALWAYS_EAGER=True → tasks rodam inline/síncrono
+# Prod (com Redis): define CELERY_BROKER_URL=redis://<host>:6379/0
+# =============================================================================
+_celery_broker = os.getenv('CELERY_BROKER_URL', '')
+
+CELERY_BROKER_URL = _celery_broker or 'memory://'
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', CELERY_BROKER_URL if _celery_broker else 'cache+memory://')
+# Sem broker Redis configurado → executa tasks de forma síncrona (modo dev)
+CELERY_TASK_ALWAYS_EAGER = not bool(_celery_broker)
+CELERY_TASK_EAGER_PROPAGATES = True   # propaga exceções em modo eager (útil para dev/testes)
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_TRACK_STARTED = True
+
+# =============================================================================
 # Logging — INFO em dev, WARNING em prod, erros sempre visíveis
 # =============================================================================
 _log_level = os.getenv('LOG_LEVEL', 'INFO' if DEBUG else 'WARNING')
@@ -280,6 +319,11 @@ LOGGING = {
         'user.email_validation': {
             'handlers': ['console'],
             'level': 'INFO',  # acompanhar rejeições de e-mail
+            'propagate': False,
+        },
+        'user': {
+            'handlers': ['console'],
+            'level': 'DEBUG',  # captura erros de envio de e-mail e outros
             'propagate': False,
         },
     },

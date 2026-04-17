@@ -1,6 +1,6 @@
 """
 Testes do AIService — MyNutri AI
-Cobre: _parse_response, _normalize_diet_data, _enforce_calorie_target, generate_diet.
+Cobre: _parse_response, _recalculate_totals, _adjust_to_calorie_target, generate_diet.
 A chamada HTTP (_call_api) é sempre mockada — sem dependência de API externa.
 """
 
@@ -51,8 +51,12 @@ def ai_service():
     return AIService()
 
 
+def _wrap_api(content_dict: dict) -> dict:
+    return {'choices': [{'message': {'content': json.dumps(content_dict)}}]}
+
+
 def _make_api_response(calories=1800, meals=None):
-    """Monta uma resposta fake da API de IA no formato OpenAI."""
+    """Resposta genérica — usada apenas em TestParseResponse."""
     if meals is None:
         meals = [
             {
@@ -61,56 +65,64 @@ def _make_api_response(calories=1800, meals=None):
                 'foods': [
                     {'name': 'Ovos', 'quantity': '3 un', 'calories': 220,
                      'protein_g': 18, 'carbs_g': 1, 'fat_g': 15},
-                    {'name': 'Pão', 'quantity': '2 fatias', 'calories': 160,
-                     'protein_g': 6, 'carbs_g': 30, 'fat_g': 2},
-                ],
-            },
-            {
-                'name': 'Almoço',
-                'time_suggestion': '12:00',
-                'foods': [
-                    {'name': 'Frango', 'quantity': '150g', 'calories': 200,
-                     'protein_g': 35, 'carbs_g': 0, 'fat_g': 5},
-                    {'name': 'Arroz', 'quantity': '150g', 'calories': 180,
-                     'protein_g': 4, 'carbs_g': 38, 'fat_g': 1},
-                    {'name': 'Feijão', 'quantity': '2 conchas', 'calories': 150,
-                     'protein_g': 9, 'carbs_g': 27, 'fat_g': 1},
-                ],
-            },
-            {
-                'name': 'Jantar',
-                'time_suggestion': '19:00',
-                'foods': [
-                    {'name': 'Tilápia', 'quantity': '150g', 'calories': 180,
-                     'protein_g': 32, 'carbs_g': 0, 'fat_g': 5},
-                    {'name': 'Batata-doce', 'quantity': '150g', 'calories': 150,
-                     'protein_g': 2, 'carbs_g': 35, 'fat_g': 0},
-                    {'name': 'Brócolis', 'quantity': '100g', 'calories': 35,
-                     'protein_g': 3, 'carbs_g': 7, 'fat_g': 0},
                 ],
             },
         ]
-
-    diet_payload = {
+    return _wrap_api({
         'goal_description': 'Emagrecimento saudável',
         'calories': calories,
         'macros': {'protein_g': 109, 'carbs_g': 138, 'fat_g': 29},
         'meals': meals,
         'substitutions': [],
         'notes': 'Beba 2L de água.',
-        'explanation': {
-            'calorie_calculation': 'TMB calculada...',
-            'macro_distribution': 'Proteína 2g/kg...',
-            'food_choices': 'Frango incluso...',
-            'meal_structure': '3 refeições...',
-            'goal_alignment': 'Déficit de 450 kcal...',
-        },
-    }
-    return {
-        'choices': [
-            {'message': {'content': json.dumps(diet_payload)}}
-        ]
-    }
+    })
+
+
+def _make_passo1_response():
+    """Resposta do Passo 1 — seleção de alimentos sem macros."""
+    return _wrap_api({
+        'goal_description': 'Emagrecimento saudável',
+        'meals': [
+            {
+                'name': 'Café da manhã',
+                'time_suggestion': '07:00',
+                'foods': [
+                    {'name': 'Ovos mexidos', 'quantity_text': '3 unidades', 'quantity_g': 150},
+                    {'name': 'Pão integral', 'quantity_text': '2 fatias', 'quantity_g': 60},
+                ],
+            },
+            {
+                'name': 'Almoço',
+                'time_suggestion': '12:00',
+                'foods': [
+                    {'name': 'Frango grelhado', 'quantity_text': '150g', 'quantity_g': 150},
+                    {'name': 'Arroz branco cozido', 'quantity_text': '150g', 'quantity_g': 150},
+                    {'name': 'Feijão cozido', 'quantity_text': '2 conchas', 'quantity_g': 160},
+                ],
+            },
+            {
+                'name': 'Jantar',
+                'time_suggestion': '19:00',
+                'foods': [
+                    {'name': 'Tilápia grelhada', 'quantity_text': '150g', 'quantity_g': 150},
+                    {'name': 'Batata-doce cozida', 'quantity_text': '150g', 'quantity_g': 150},
+                ],
+            },
+        ],
+        'substitutions': [],
+        'notes': 'Beba 2L de água.',
+    })
+
+
+def _make_passo2_response():
+    """Resposta do Passo 2 — explicação."""
+    return _wrap_api({
+        'calorie_calculation': 'TMB calculada via Mifflin-St Jeor...',
+        'macro_distribution': 'Proteína 2g/kg...',
+        'food_choices': 'Frango incluso nas preferências...',
+        'meal_structure': '3 refeições bem distribuídas...',
+        'goal_alignment': 'Déficit de 450 kcal para emagrecimento...',
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -140,15 +152,15 @@ class TestParseResponse:
 
 
 # ---------------------------------------------------------------------------
-# Testes de _normalize_diet_data
+# Testes de _recalculate_totals
 # ---------------------------------------------------------------------------
 
-class TestNormalizeDietData:
+class TestRecalculateTotals:
 
     def test_recalcula_calorias_a_partir_dos_alimentos(self, ai_service):
-        """Deve ignorar o 'calories' declarado e recalcular a partir dos foods."""
+        """Deve ignorar o 'calories' original e recalcular a partir dos foods."""
         data = {
-            'calories': 9999,  # valor errado declarado pela IA
+            'calories': 9999,
             'meals': [
                 {'foods': [
                     {'calories': 200, 'protein_g': 20, 'carbs_g': 10, 'fat_g': 5},
@@ -156,13 +168,13 @@ class TestNormalizeDietData:
                 ]}
             ],
         }
-        result = ai_service._normalize_diet_data(data)
+        result = ai_service._recalculate_totals(data)
         assert result['calories'] == 500
 
     def test_recalcula_macros_a_partir_dos_alimentos(self, ai_service):
         data = {
             'calories': 500,
-            'macros': {'protein_g': 0, 'carbs_g': 0, 'fat_g': 0},  # errado
+            'macros': {'protein_g': 0, 'carbs_g': 0, 'fat_g': 0},
             'meals': [
                 {'foods': [
                     {'calories': 200, 'protein_g': 20, 'carbs_g': 10, 'fat_g': 5},
@@ -170,76 +182,87 @@ class TestNormalizeDietData:
                 ]}
             ],
         }
-        result = ai_service._normalize_diet_data(data)
+        result = ai_service._recalculate_totals(data)
         assert result['macros']['protein_g'] == 30
         assert result['macros']['carbs_g'] == 50
         assert result['macros']['fat_g'] == 13
 
-    def test_sem_alimentos_nao_altera_calories(self, ai_service):
+    def test_sem_alimentos_retorna_zero(self, ai_service):
         data = {'calories': 0, 'meals': []}
-        result = ai_service._normalize_diet_data(data)
+        result = ai_service._recalculate_totals(data)
         assert result['calories'] == 0
 
-    def test_alimentos_sem_macros_preserva_quando_calorias_batem(self, ai_service):
-        """Se os alimentos não têm macro por item, mas as calorias declaradas batem
-        com a soma dos foods (±5%), os macros originais são mantidos sem escala."""
-        # protein 20×4=80, carbs 10×4=40, fat 5×9=45 → macro_kcal=165
-        # Alimentos somam 165 kcal — sem divergência → macros não são escalados
+    def test_multiplas_refeicoes_soma_corretamente(self, ai_service):
         data = {
-            'calories': 165,
-            'macros': {'protein_g': 20, 'carbs_g': 10, 'fat_g': 5},
+            'calories': 0,
             'meals': [
-                {'foods': [{'calories': 165}]}  # sem protein_g/carbs_g/fat_g
+                {'foods': [{'calories': 300, 'protein_g': 30, 'carbs_g': 30, 'fat_g': 5}]},
+                {'foods': [{'calories': 400, 'protein_g': 20, 'carbs_g': 60, 'fat_g': 8}]},
             ],
         }
-        result = ai_service._normalize_diet_data(data)
-        assert result['macros']['protein_g'] == 20
-        assert result['macros']['carbs_g'] == 10
-        assert result['macros']['fat_g'] == 5
+        result = ai_service._recalculate_totals(data)
+        assert result['calories'] == 700
+        assert result['macros']['protein_g'] == 50
+        assert result['macros']['carbs_g'] == 90
+        assert result['macros']['fat_g'] == 13
 
 
 # ---------------------------------------------------------------------------
-# Testes de _enforce_calorie_target
+# Testes de _adjust_to_calorie_target
 # ---------------------------------------------------------------------------
 
-class TestEnforceCalorieTarget:
+class TestAdjustToCalorieTarget:
 
     def test_sem_divergencia_nao_altera(self, ai_service):
         """Dentro de ±10%, não deve escalar."""
         data = {
             'calories': 1800,
             'meals': [
-                {'foods': [{'calories': 900, 'protein_g': 50, 'carbs_g': 100, 'fat_g': 20}]},
-                {'foods': [{'calories': 900, 'protein_g': 50, 'carbs_g': 100, 'fat_g': 20}]},
+                {'foods': [{'name': 'Arroz', 'quantity_g': 100, 'calories': 900,
+                            'protein_g': 50, 'carbs_g': 100, 'fat_g': 20}]},
+                {'foods': [{'name': 'Frango', 'quantity_g': 100, 'calories': 900,
+                            'protein_g': 50, 'carbs_g': 100, 'fat_g': 20}]},
             ],
         }
-        result = ai_service._enforce_calorie_target(data, target_calories=1800)
+        result = ai_service._adjust_to_calorie_target(data, target_calories=1800)
         assert result['calories'] == 1800
 
-    def test_com_grande_divergencia_escala_calorias(self, ai_service):
-        """Divergência >10% deve escalar os valores proporcionalmente."""
+    @patch('nutrition.services.lookup_food_nutrition')
+    def test_com_grande_divergencia_escala_quantidades(self, mock_lookup, ai_service):
+        """Divergência >10% deve escalar quantity_g e recalcular macros."""
+        def _scaled_lookup(name, qty):
+            return {
+                'calories': int(qty * 5),
+                'protein_g': round(qty * 0.25, 1),
+                'carbs_g': round(qty * 0.60, 1),
+                'fat_g': round(qty * 0.10, 1),
+            }
+        mock_lookup.side_effect = _scaled_lookup
+
         data = {
             'calories': 1000,
             'meals': [
                 {'foods': [
-                    {'calories': 500, 'protein_g': 25, 'carbs_g': 60, 'fat_g': 10},
-                    {'calories': 500, 'protein_g': 25, 'carbs_g': 60, 'fat_g': 10},
+                    {'name': 'Arroz', 'quantity_g': 100, 'quantity_text': '100g',
+                     'calories': 500, 'protein_g': 25, 'carbs_g': 60, 'fat_g': 10},
+                    {'name': 'Frango', 'quantity_g': 100, 'quantity_text': '100g',
+                     'calories': 500, 'protein_g': 25, 'carbs_g': 60, 'fat_g': 10},
                 ]},
             ],
         }
-        result = ai_service._enforce_calorie_target(data, target_calories=2000)
-        # Após escalar de 1000 para 2000, cada alimento deve ter calories dobradas
+        result = ai_service._adjust_to_calorie_target(data, target_calories=2000)
+        # scale=2 → quantity_g: 100→200 → lookup retorna 200*5=1000 por alimento
         assert result['calories'] == 2000
         assert result['meals'][0]['foods'][0]['calories'] == 1000
 
     def test_target_zero_nao_altera(self, ai_service):
         data = {'calories': 1800, 'meals': []}
-        result = ai_service._enforce_calorie_target(data, target_calories=0)
+        result = ai_service._adjust_to_calorie_target(data, target_calories=0)
         assert result['calories'] == 1800
 
     def test_calories_zero_nao_altera(self, ai_service):
         data = {'calories': 0, 'meals': []}
-        result = ai_service._enforce_calorie_target(data, target_calories=1800)
+        result = ai_service._adjust_to_calorie_target(data, target_calories=1800)
         assert result['calories'] == 0
 
 
@@ -252,45 +275,38 @@ class TestGenerateDiet:
 
     @patch.object(AIService, '_call_api')
     def test_gera_dietplan_no_banco(self, mock_call, ai_service, anamnese):
-        mock_call.return_value = _make_api_response(calories=1275)
+        mock_call.side_effect = [_make_passo1_response(), _make_passo2_response()]
         diet_plan = ai_service.generate_diet(anamnese)
         assert DietPlan.objects.filter(id=diet_plan.id).exists()
 
     @patch.object(AIService, '_call_api')
     def test_gera_meals_no_banco(self, mock_call, ai_service, anamnese):
-        mock_call.return_value = _make_api_response(calories=1275)
+        mock_call.side_effect = [_make_passo1_response(), _make_passo2_response()]
         diet_plan = ai_service.generate_diet(anamnese)
         assert Meal.objects.filter(diet_plan=diet_plan).count() == 3
 
     @patch.object(AIService, '_call_api')
-    def test_dietplan_salvo_com_calories_corretas(self, mock_call, ai_service, anamnese):
-        mock_call.return_value = _make_api_response(calories=1275)
+    def test_dietplan_salvo_com_calories_positivas(self, mock_call, ai_service, anamnese):
+        mock_call.side_effect = [_make_passo1_response(), _make_passo2_response()]
         diet_plan = ai_service.generate_diet(anamnese)
-        # Calorias salvas = soma real dos alimentos (normalize_diet_data sobrescreve)
-        soma_real = sum(
-            f['calories']
-            for m in _make_api_response()['choices'][0]['message']['content'].__class__
-            .__mro__  # evita reprocessar — apenas verifica que não é 9999
-            if False
-        ) or diet_plan.total_calories
         assert diet_plan.total_calories > 0
 
     @patch.object(AIService, '_call_api')
     def test_dietplan_vinculado_ao_usuario_correto(self, mock_call, ai_service, anamnese):
-        mock_call.return_value = _make_api_response(calories=1275)
+        mock_call.side_effect = [_make_passo1_response(), _make_passo2_response()]
         diet_plan = ai_service.generate_diet(anamnese)
         assert diet_plan.user == anamnese.user
 
     @patch.object(AIService, '_call_api')
     def test_dietplan_vinculado_a_anamnese(self, mock_call, ai_service, anamnese):
-        mock_call.return_value = _make_api_response(calories=1275)
+        mock_call.side_effect = [_make_passo1_response(), _make_passo2_response()]
         diet_plan = ai_service.generate_diet(anamnese)
         assert diet_plan.anamnese == anamnese
 
     @patch.object(AIService, '_call_api')
     def test_meal_com_horario_no_nome(self, mock_call, ai_service, anamnese):
         """Horário sugerido deve ser incluído no nome da refeição."""
-        mock_call.return_value = _make_api_response(calories=1275)
+        mock_call.side_effect = [_make_passo1_response(), _make_passo2_response()]
         diet_plan = ai_service.generate_diet(anamnese)
         primeira_meal = diet_plan.meals.order_by('order').first()
         assert '07:00' in primeira_meal.meal_name
@@ -298,7 +314,7 @@ class TestGenerateDiet:
     @patch.object(AIService, '_call_api')
     def test_meal_descricao_lista_alimentos(self, mock_call, ai_service, anamnese):
         """Descrição da refeição deve conter os nomes dos alimentos."""
-        mock_call.return_value = _make_api_response(calories=1275)
+        mock_call.side_effect = [_make_passo1_response(), _make_passo2_response()]
         diet_plan = ai_service.generate_diet(anamnese)
         primeira_meal = diet_plan.meals.order_by('order').first()
         assert 'Ovos' in primeira_meal.description
@@ -308,10 +324,18 @@ class TestGenerateDiet:
         service.api_key = ''
         service.api_url = ''
         with pytest.raises((ValueError, Exception)):
-            service._call_api('prompt')
+            service._call_api('prompt', 'system')
 
     @patch.object(AIService, '_call_api')
     def test_resposta_invalida_da_ia_levanta_exception(self, mock_call, ai_service, anamnese):
         mock_call.return_value = {'choices': [{'message': {'content': 'json inválido {'}}]}
         with pytest.raises((ValueError, Exception)):
             ai_service.generate_diet(anamnese)
+
+    @patch.object(AIService, '_call_api')
+    def test_passo2_falha_nao_impede_criacao_do_dietplan(self, mock_call, ai_service, anamnese):
+        """Falha no Passo 2 (explicação) não deve cancelar a geração."""
+        invalid_passo2 = {'choices': [{'message': {'content': 'json inválido {'}}]}
+        mock_call.side_effect = [_make_passo1_response(), invalid_passo2]
+        diet_plan = ai_service.generate_diet(anamnese)
+        assert DietPlan.objects.filter(id=diet_plan.id).exists()

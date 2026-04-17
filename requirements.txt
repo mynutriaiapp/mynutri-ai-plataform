@@ -22,6 +22,10 @@ psycopg2-binary==2.9.11
 tzdata==2025.3
 dnspython==2.7.0             # validação DNS/MX de e-mail
 
+# ─── Celery + Broker ─────────────────────────────────────────────────────────
+celery==5.4.0
+redis==5.2.1                 # cliente Redis para broker/backend do Celery
+
 # ─── Testes ───────────────────────────────────────────────────────────────────
 pytest==9.0.3
 pytest-django==4.12.0

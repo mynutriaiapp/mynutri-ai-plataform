@@ -1,13 +1,22 @@
+import logging
+
+from django.conf import settings
+from django.core.mail import send_mail
+from django.contrib.auth import get_user_model
+
 from rest_framework import status, serializers as drf_serializers
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.throttling import AnonRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
-from django.contrib.auth import get_user_model
 
+from .forms import ContatoForm
 from .serializers import RegisterSerializer, UserProfileSerializer, UpdateProfileSerializer
+
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -86,6 +95,68 @@ class RegisterAPIView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+class ContactThrottle(AnonRateThrottle):
+    """5 envios por hora por IP — protege contra spam no formulário de contato."""
+    scope = 'contact'
+
+
+class ContactAPIView(APIView):
+    """
+    POST /api/v1/contact
+    Recebe o formulário de contato, valida e envia e-mail para mynutriai.app@gmail.com.
+    Aberto ao público (AllowAny), com rate-limit de 5/hora por IP.
+    """
+    permission_classes = [AllowAny]
+    throttle_classes = [ContactThrottle]
+
+    def post(self, request):
+        form = ContatoForm(request.data)
+        if not form.is_valid():
+            return Response({'errors': form.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        data = form.cleaned_data
+        nome     = data['nome']
+        email    = data['email']
+        assunto  = data['assunto']
+        mensagem = data['mensagem']
+
+        body_lines = []
+
+        # Inclui info do usuário autenticado (se logado)
+        if request.user.is_authenticated:
+            body_lines += [
+                f'[Usuário autenticado: {request.user.email} — ID {request.user.id}]',
+                '',
+            ]
+
+        body_lines += [
+            f'Nome: {nome}',
+            f'E-mail: {email}',
+            f'Assunto: {assunto}',
+            '',
+            'Mensagem:',
+            mensagem,
+        ]
+
+        try:
+            send_mail(
+                subject=f'[MyNutri AI - Contato] {assunto}',
+                message='\n'.join(body_lines),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[settings.CONTACT_EMAIL],
+                fail_silently=False,
+            )
+            logger.info('Contact email sent — from=%s subject=%s', email, assunto)
+        except Exception as exc:
+            logger.error('Contact email failed — %s', exc, exc_info=True)
+            return Response(
+                {'error': 'Não foi possível enviar sua mensagem. Tente novamente mais tarde.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        return Response({'message': 'Mensagem enviada com sucesso.'}, status=status.HTTP_200_OK)
 
 
 class ProfileAPIView(APIView):

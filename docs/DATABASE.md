@@ -4,127 +4,211 @@
 
 O banco de dados é responsável por armazenar todas as informações da aplicação, incluindo dados dos usuários, respostas da anamnese e planos alimentares gerados.
 
+- **Desenvolvimento:** SQLite (`db.sqlite3`)
+- **Produção:** PostgreSQL (configurar via `DATABASE_URL` no `.env`)
+
 ### Diagrama de Entidade-Relacionamento (ERD)
 
 ```mermaid
 erDiagram
+    users ||--o| profiles : "tem"
     users ||--o{ anamnese : "responde"
     users ||--o{ diet_plans : "possui"
-    anamnese ||--o| diet_plans : "gera"
+    anamnese ||--o{ diet_plans : "gera"
     diet_plans ||--o{ meals : "contém"
 
     users {
         int id PK
-        string nome
+        string username
+        string first_name
+        string last_name
         string email
-        string senha_hash
-        datetime data_criacao
+        string password
+        string phone
+        date date_of_birth
+        datetime date_joined
+        bool is_active
     }
-    
+
+    profiles {
+        int id PK
+        int user_id FK
+        string gender
+        decimal weight
+        decimal height
+        string activity_level
+        string goal
+        text allergies
+        text food_restrictions
+        text food_preferences
+        int meals_per_day
+        datetime created_at
+        datetime updated_at
+    }
+
     anamnese {
         int id PK
         int user_id FK
-        int idade
-        string sexo
-        float peso
-        float altura
-        string nivel_atividade
-        string objetivo
-        string restricoes_alimentares
-        string preferencias_alimentares
-        datetime data_resposta
+        int age
+        string gender
+        decimal weight_kg
+        decimal height_cm
+        string activity_level
+        string goal
+        int meals_per_day
+        text food_restrictions
+        text food_preferences
+        text allergies
+        datetime answered_at
     }
-    
+
     diet_plans {
         int id PK
         int user_id FK
         int anamnese_id FK
-        json dieta_gerada
-        int calorias_totais
-        datetime data_criacao
+        json raw_response
+        int total_calories
+        string goal_description
+        datetime created_at
     }
-    
+
     meals {
         int id PK
         int diet_plan_id FK
-        string nome_refeicao
-        string descricao_refeicao
-        int calorias
+        string meal_name
+        text description
+        int calories
+        int order
     }
 ```
 
 ---
 
-## Tabela: users
+## Tabela: users (CustomUser)
 
-Armazena informações básicas dos usuários.
+Estende `AbstractUser` do Django. Login é feito via **email** (não username).
 
-Campos:
-
-- id
-- nome
-- email
-- senha_hash
-- data_criacao
-
----
-
-## Tabela: anamnese
-
-Armazena as respostas do questionário nutricional.
-
-Campos:
-
-- id
-- user_id
-- idade
-- sexo
-- peso
-- altura
-- nivel_atividade
-- objetivo
-- restricoes_alimentares
-- preferencias_alimentares
-- data_resposta
-
-Relacionamento:
-
-anamnese.user_id → users.id
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | int (PK) | ID auto-incremento |
+| `username` | string | Gerado a partir do email |
+| `first_name` | string | Primeiro nome |
+| `last_name` | string | Sobrenome |
+| `email` | string (unique) | Email — usado como login |
+| `password` | string | Hash da senha (Django gerencia) |
+| `phone` | string | Telefone (opcional) |
+| `date_of_birth` | date | Data de nascimento (opcional) |
+| `date_joined` | datetime | Data de criação da conta |
+| `is_active` | bool | Conta ativa |
 
 ---
 
-## Tabela: diet_plans
+## Tabela: profiles (Profile)
 
-Armazena os planos alimentares gerados pela IA.
+Perfil nutricional do usuário (relação OneToOne com `CustomUser`). Criado automaticamente junto com o usuário.
 
-Campos:
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | int (PK) | ID auto-incremento |
+| `user_id` | int (FK) | Referência ao `CustomUser` |
+| `gender` | string | `M`, `F` ou `O` |
+| `weight` | decimal(5,2) | Peso em kg (opcional) |
+| `height` | decimal(5,2) | Altura em cm (opcional) |
+| `activity_level` | string | `sedentary`, `light`, `moderate`, `intense`, `athlete` |
+| `goal` | string | `lose`, `maintain`, `gain` |
+| `allergies` | text | Alergias alimentares |
+| `food_restrictions` | text | Restrições alimentares |
+| `food_preferences` | text | Preferências alimentares |
+| `meals_per_day` | int | Quantidade de refeições por dia (padrão: 4) |
+| `created_at` | datetime | Data de criação |
+| `updated_at` | datetime | Última atualização |
 
-- id
-- user_id
-- anamnese_id
-- dieta_gerada
-- calorias_totais
-- data_criacao
+Relacionamento: `profiles.user_id → users.id` (OneToOne)
+
+---
+
+## Tabela: anamnese (Anamnese)
+
+Armazena as respostas do questionário nutricional. Cada registro representa uma sessão de anamnese completa. Um usuário pode ter múltiplas anamneses.
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | int (PK) | ID auto-incremento |
+| `user_id` | int (FK) | Referência ao `CustomUser` |
+| `age` | int | Idade em anos |
+| `gender` | string | `M`, `F` ou `O` |
+| `weight_kg` | decimal(5,2) | Peso em kg |
+| `height_cm` | decimal(5,2) | Altura em cm |
+| `activity_level` | string | `sedentary`, `light`, `moderate`, `intense`, `athlete` |
+| `goal` | string | `lose`, `maintain`, `gain` |
+| `meals_per_day` | int | Quantidade de refeições por dia (padrão: 3) |
+| `food_restrictions` | text | Restrições alimentares (opcional) |
+| `food_preferences` | text | Preferências alimentares (opcional) |
+| `allergies` | text | Alergias alimentares (opcional) |
+| `answered_at` | datetime | Data/hora do preenchimento |
+
+Relacionamento: `anamnese.user_id → users.id`
+
+---
+
+## Tabela: diet_plans (DietPlan)
+
+Armazena os planos alimentares gerados pela IA a partir de uma Anamnese.
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | int (PK) | ID auto-incremento |
+| `user_id` | int (FK) | Referência ao `CustomUser` |
+| `anamnese_id` | int (FK, nullable) | Referência à `Anamnese` de origem |
+| `raw_response` | JSON | Resposta completa da IA (array `refeicoes[]`) |
+| `total_calories` | int | Total calórico diário extraído do JSON |
+| `goal_description` | string | Objetivo em texto (ex: "Emagrecimento") |
+| `created_at` | datetime | Data/hora de geração |
 
 Relacionamentos:
-
-diet_plans.user_id → users.id  
-diet_plans.anamnese_id → anamnese.id
+- `diet_plans.user_id → users.id`
+- `diet_plans.anamnese_id → anamnese.id` (SET_NULL se anamnese for deletada)
 
 ---
 
-## Tabela: meals
+## Tabela: meals (Meal)
 
-Armazena refeições individuais de um plano alimentar.
+Armazena cada refeição individual de um `DietPlan`. Mapeia diretamente o array `refeicoes[]` do JSON retornado pela IA.
 
-Campos:
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | int (PK) | ID auto-incremento |
+| `diet_plan_id` | int (FK) | Referência ao `DietPlan` |
+| `meal_name` | string(100) | Nome da refeição (ex: "Café da manhã") |
+| `description` | text | Alimentos e quantidades |
+| `calories` | int | Calorias estimadas |
+| `order` | int | Ordem de exibição (0 = primeira refeição) |
 
-- id
-- diet_plan_id
-- nome_refeicao
-- descricao_refeicao
-- calorias
+Relacionamento: `meals.diet_plan_id → diet_plans.id` (CASCADE)
 
-Relacionamento:
+---
 
-meals.diet_plan_id → diet_plans.id
+## Valores Aceitos nos Campos de Choice
+
+### gender
+| Valor | Descrição |
+|-------|-----------|
+| `M` | Masculino |
+| `F` | Feminino |
+| `O` | Outro |
+
+### activity_level
+| Valor | Descrição |
+|-------|-----------|
+| `sedentary` | Sedentário |
+| `light` | Levemente ativo |
+| `moderate` | Moderadamente ativo |
+| `intense` | Muito ativo |
+| `athlete` | Atleta |
+
+### goal
+| Valor | Descrição |
+|-------|-----------|
+| `lose` | Emagrecimento |
+| `maintain` | Manutenção |
+| `gain` | Hipertrofia / Ganho de Massa |

@@ -137,6 +137,73 @@ class DietPlan(models.Model):
         return f'Plano de {self.user} — {self.created_at.strftime("%d/%m/%Y")} ({self.total_calories} kcal)'
 
 
+class DietJob(models.Model):
+    """
+    Rastreia o estado de uma geração de dieta assíncrona via Celery.
+
+    Fluxo de status:
+        pending → processing → done
+                             ↘ failed
+
+    Endpoints:
+        POST /api/v1/diet/generate → cria DietJob (pending) + enfileira task
+        GET  /api/v1/diet/status/<id> → frontend faz polling neste endpoint
+    """
+
+    STATUS_PENDING    = 'pending'
+    STATUS_PROCESSING = 'processing'
+    STATUS_DONE       = 'done'
+    STATUS_FAILED     = 'failed'
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING,    'Pendente'),
+        (STATUS_PROCESSING, 'Processando'),
+        (STATUS_DONE,       'Concluído'),
+        (STATUS_FAILED,     'Falhou'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='diet_jobs',
+        verbose_name='Usuário',
+    )
+    anamnese = models.ForeignKey(
+        Anamnese,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='diet_jobs',
+        verbose_name='Anamnese de origem',
+    )
+    status = models.CharField(
+        'Status',
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        db_index=True,
+    )
+    diet_plan = models.OneToOneField(
+        DietPlan,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='job',
+        verbose_name='Plano gerado',
+    )
+    error_message = models.TextField('Mensagem de erro', blank=True)
+    created_at = models.DateTimeField('Criado em', auto_now_add=True)
+    updated_at = models.DateTimeField('Atualizado em', auto_now=True)
+
+    class Meta:
+        verbose_name = 'Job de Geração'
+        verbose_name_plural = 'Jobs de Geração'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'DietJob#{self.pk} [{self.status}] — usuário {self.user_id}'
+
+
 class Meal(models.Model):
     """
     Armazena cada refeição individual de um DietPlan.

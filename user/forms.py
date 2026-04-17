@@ -53,10 +53,14 @@ class ContatoForm(forms.Form):
     )
 
     mensagem = forms.CharField(
+        min_length=10,
         max_length=2000,
         label='Mensagem',
         widget=forms.Textarea(attrs={'rows': 5, 'placeholder': 'Sua mensagem...'}),
-        error_messages={'required': 'Por favor, escreva sua mensagem.'},
+        error_messages={
+            'required': 'Por favor, escreva sua mensagem.',
+            'min_length': 'A mensagem deve ter pelo menos 10 caracteres.',
+        },
     )
 
     def clean_email(self) -> str:

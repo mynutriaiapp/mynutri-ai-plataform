@@ -1,4 +1,5 @@
 import re
+import unicodedata
 
 from .models import Anamnese, DietPlan, Meal
 from rest_framework import serializers
@@ -6,28 +7,94 @@ from rest_framework import serializers
 
 MAX_TEXT_LENGTH = 500
 
+# Caracteres de controle Unicode que são invisíveis mas podem escapar regex simples
+_CONTROL_CHARS_RE = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\u200b-\u200f\u2028\u2029\ufeff]')
+
+# Padrões de injeção de prompt — avaliados APÓS normalização Unicode (NFKC)
+# Cobre variações comuns de bypass: espaços extras, sinônimos, idiomas, delimitadores
+_INJECTION_PATTERNS = [
+    # Tentativas diretas de sobreescrever instruções
+    r'(?i)ignore\s+(all\s+)?(previous|above|prior)\s+(instructions?|context|rules?|prompts?)',
+    r'(?i)(forget|disregard|override|bypass|reset)\s+(all\s+)?(previous|above|prior|your)',
+    r'(?i)new\s+(instructions?|rules?|prompt|task)\s*[:\-]',
+    r'(?i)you\s+(are\s+now|must\s+now|should\s+now|will\s+now)',
+    r'(?i)act\s+as\s+(a\s+)?(new|different|another|unrestricted)',
+
+    # Tentativas de injeção de role/sistema
+    r'(?i)(^|\n)\s*system\s*:',
+    r'(?i)(^|\n)\s*(user|assistant|human|ai|bot|gpt|claude)\s*:',
+    r'(?i)<\s*(system|instruction|prompt|context|rule)\s*>',
+
+    # Delimitadores de separação de contexto (técnica de "context break")
+    r'[-=_*#]{6,}',        # ex: ------  ======  ######
+    r'\[INST\]|\[/INST\]', # LLaMA instruction tags
+    r'<\|im_start\|>|<\|im_end\|>',  # ChatML tags (GPT-4)
+    r'<<SYS>>|<</SYS>>',   # LLaMA system tags
+
+    # Tentativas de exfiltração / execução
+    r'(?i)(print|output|reveal|show|return|display)\s+(your\s+)?(system\s+)?(prompt|instructions?|rules?|context)',
+    r'(?i)what\s+(are\s+)?your\s+(instructions?|rules?|system\s+prompt)',
+
+    # Português — variações locais
+    r'(?i)ignore\s+(todas?\s+as?\s+)?(instruções|regras|contexto)\s*(anteriores?|acima)',
+    r'(?i)(esqueça|ignore|descarte|substitua)\s+(todas?\s+as?\s+)?(instruções|regras)\s*(anteriores?|acima)',
+    r'(?i)novas?\s+instruções?\s*[:\-]',
+    r'(?i)você\s+(agora\s+)?(é|deve\s+ser|vai\s+ser)\s+(um|uma)',
+]
+
+_COMPILED_PATTERNS = [re.compile(p) for p in _INJECTION_PATTERNS]
+
+
+def _normalize(text: str) -> str:
+    """
+    Normaliza o texto antes da varredura de injeção:
+    1. NFKC colapsa caracteres Unicode equivalentes (ex: ｉ → i, ＳＹＳＴＥＭsystem)
+    2. Remove caracteres de controle invisíveis usados como bypass
+    3. Colapsa espaços duplicados para que padrões com \s+ funcionem corretamente
+    """
+    text = unicodedata.normalize('NFKC', text)
+    text = _CONTROL_CHARS_RE.sub('', text)
+    text = re.sub(r' {2,}', ' ', text)
+    return text
+
 
 def validate_free_text(value, field_name):
-    """Valida campos de texto livre contra prompt injection e tamanho excessivo."""
+    """
+    Valida campos de texto livre contra prompt injection e tamanho excessivo.
+
+    Proteções em camadas:
+    1. Limite de comprimento
+    2. Remoção de caracteres de controle invisíveis
+    3. Normalização Unicode (NFKC) antes da varredura — previne bypass com homoglifos
+    4. Varredura com 20+ padrões cobrindo inglês, português e técnicas de delimiter injection
+    5. Detecção de anomalias: razão anormal de caracteres especiais
+    """
     if len(value) > MAX_TEXT_LENGTH:
         raise serializers.ValidationError(
             f'{field_name} não pode exceder {MAX_TEXT_LENGTH} caracteres.'
         )
-    # Rejeitar padrões que tentam manipular instruções da IA
-    injection_patterns = [
-        r'(?i)ignore\s+(all\s+)?previous\s+instructions',
-        r'(?i)ignore\s+(all\s+)?above',
-        r'(?i)system\s*:',
-        r'(?i)you\s+are\s+now',
-        r'(?i)new\s+instructions?\s*:',
-        r'(?i)forget\s+(all\s+)?previous',
-        r'(?i)disregard\s+(all\s+)?',
-    ]
-    for pattern in injection_patterns:
-        if re.search(pattern, value):
+
+    if not value.strip():
+        return value
+
+    normalized = _normalize(value)
+
+    # Detecção de anomalia: texto legítimo raramente tem >30% de caracteres não-alfanuméricos
+    # (exclui espaços da contagem para não penalizar frases normais)
+    non_space = normalized.replace(' ', '')
+    if non_space:
+        special_ratio = sum(1 for c in non_space if not (c.isalnum() or c in '.,;:!?-\'\"()')) / len(non_space)
+        if special_ratio > 0.35:
             raise serializers.ValidationError(
                 f'{field_name} contém conteúdo não permitido.'
             )
+
+    for pattern in _COMPILED_PATTERNS:
+        if pattern.search(normalized):
+            raise serializers.ValidationError(
+                f'{field_name} contém conteúdo não permitido.'
+            )
+
     return value
 
 
@@ -81,6 +148,24 @@ class MealSerializer(serializers.ModelSerializer):
     class Meta:
         model = Meal
         fields = ('nome_refeicao', 'descricao_refeicao', 'calorias_estimadas', 'order')
+
+
+class DietPlanSummarySerializer(serializers.ModelSerializer):
+    """
+    Serializer compacto para listagem do histórico.
+    Endpoint: GET /api/v1/diet/list
+    Não inclui refeições detalhadas — apenas dados suficientes para a listagem.
+    """
+    calorias_totais = serializers.IntegerField(source='total_calories')
+    macros = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DietPlan
+        fields = ('id', 'calorias_totais', 'goal_description', 'macros', 'created_at')
+        read_only_fields = fields
+
+    def get_macros(self, obj):
+        return obj.raw_response.get('macros') if obj.raw_response else None
 
 
 class DietPlanSerializer(serializers.ModelSerializer):

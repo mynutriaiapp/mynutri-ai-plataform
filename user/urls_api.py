@@ -1,6 +1,6 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
-from .api_views import RegisterAPIView, ProfileAPIView, EmailTokenObtainPairView
+from .api_views import RegisterAPIView, ProfileAPIView, EmailTokenObtainPairView, ContactAPIView
 
 urlpatterns = [
     # POST /api/v1/auth/register  → Criação de conta + retorna token JWT
@@ -14,4 +14,7 @@ urlpatterns = [
 
     # GET /api/v1/user/profile    → Dados do usuário logado
     path('user/profile', ProfileAPIView.as_view(), name='api-profile'),
+
+    # POST /api/v1/contact        → Envia e-mail de contato (público, rate-limit 5/h)
+    path('contact', ContactAPIView.as_view(), name='api-contact'),
 ]
