@@ -7,6 +7,7 @@
   <meta name="description" content="Faça login ou crie sua conta para acessar suas dietas personalizadas." />
   <link rel="icon" type="image/png" href="/static/src/assets/mynutriai-logo.png" />
   <link rel="stylesheet" href="/static/src/styles/index.css" />
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     /* Estilos locais para auth.html */
     body {
@@ -349,7 +350,7 @@
         <div class="social-auth-divider">
           <span>OU</span>
         </div>
-        <button class="btn-social">
+        <button class="btn-social" id="btn-google" type="button">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
             <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -358,6 +359,7 @@
           </svg>
           Continuar com Google
         </button>
+        <div id="google-btn-hidden" style="position:absolute;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;"></div>
       </div>
 
     </div>
@@ -569,6 +571,62 @@
         setLoading(btn, false);
       }
     });
+
+    // ── Google Sign-In ────────────────────────────────────────────────────────
+    const GOOGLE_CLIENT_ID = '806980657199-js2h4t4o9cq8577c7geulvgosdt777t2.apps.googleusercontent.com';
+
+    async function handleGoogleCredential(response) {
+      clearError();
+      try {
+        const res = await fetch(`${API_BASE}/auth/google`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id_token: response.credential }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          showError(data.error || 'Erro ao autenticar com Google.');
+          return;
+        }
+
+        saveSession(data);
+        afterAuth();
+      } catch {
+        showError('Erro de conexão ao autenticar com Google.');
+      }
+    }
+
+    function initGoogleSignIn() {
+      if (!window.google) return;
+      google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleGoogleCredential,
+        auto_select: false,
+        cancel_on_tap_outside: true,
+      });
+      // Renderiza o botão oficial do Google invisível — nosso botão customizado o aciona via click()
+      google.accounts.id.renderButton(
+        document.getElementById('google-btn-hidden'),
+        { theme: 'outline', size: 'large' }
+      );
+    }
+
+    document.getElementById('btn-google').addEventListener('click', () => {
+      const googleBtn = document.querySelector('#google-btn-hidden div[role="button"]');
+      if (googleBtn) {
+        googleBtn.click();
+      } else {
+        showError('Google Sign-In não carregou. Recarregue a página.');
+      }
+    });
+
+    if (window.google) {
+      initGoogleSignIn();
+    } else {
+      document.querySelector('script[src*="accounts.google.com"]')
+        .addEventListener('load', initGoogleSignIn);
+    }
 
     // Page transitions
     document.querySelectorAll('a[href]').forEach(link => {

@@ -1,5 +1,7 @@
 import logging
 
+import requests as http_requests
+
 from django.conf import settings
 from django.core.mail import send_mail
 from django.contrib.auth import get_user_model
@@ -12,6 +14,8 @@ from rest_framework.throttling import AnonRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
+
+from user.models import Profile
 
 from .forms import ContatoForm
 from .serializers import RegisterSerializer, UserProfileSerializer, UpdateProfileSerializer
@@ -157,6 +161,65 @@ class ContactAPIView(APIView):
             )
 
         return Response({'message': 'Mensagem enviada com sucesso.'}, status=status.HTTP_200_OK)
+
+
+class GoogleAuthAPIView(APIView):
+    """
+    POST /api/v1/auth/google
+    Recebe { id_token } do Google Sign-In, valida com a API do Google
+    e retorna JWT do sistema (mesmo formato de /auth/login e /auth/register).
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        id_token = request.data.get('id_token')
+        if not id_token:
+            return Response({'error': 'id_token é obrigatório.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            resp = http_requests.get(
+                'https://oauth2.googleapis.com/tokeninfo',
+                params={'id_token': id_token},
+                timeout=5,
+            )
+        except http_requests.RequestException as exc:
+            logger.error('Google tokeninfo request failed — %s', exc)
+            return Response({'error': 'Não foi possível validar o token Google.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        if resp.status_code != 200:
+            return Response({'error': 'Token Google inválido ou expirado.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        google_data = resp.json()
+        email = google_data.get('email', '').lower()
+        if not email:
+            return Response({'error': 'E-mail não retornado pelo Google.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user, created = User.objects.get_or_create(
+            email=email,
+            defaults={
+                'username': email,
+                'first_name': google_data.get('given_name', ''),
+                'last_name': google_data.get('family_name', ''),
+            },
+        )
+
+        if created:
+            Profile.objects.get_or_create(user=user)
+            logger.info('New user created via Google OAuth — email=%s', email)
+
+        refresh = RefreshToken.for_user(user)
+        return Response(
+            {
+                'token': str(refresh.access_token),
+                'refresh': str(refresh),
+                'user': {
+                    'id': user.id,
+                    'email': user.email,
+                    'nome': user.get_full_name() or user.first_name or email,
+                },
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class ProfileAPIView(APIView):
