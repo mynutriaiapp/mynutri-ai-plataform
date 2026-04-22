@@ -1,6 +1,7 @@
 """
-Testes do AIService — MyNutri AI
-Cobre: _parse_response, _recalculate_totals, _adjust_to_calorie_target, generate_diet.
+Testes do AIService e generate_diet_task — MyNutri AI
+Cobre: _parse_response, _recalculate_totals, _adjust_to_calorie_target, generate_diet,
+       e o fluxo completo da task Celery (status transitions, retry logic).
 A chamada HTTP (_call_api) é sempre mockada — sem dependência de API externa.
 """
 
@@ -8,8 +9,9 @@ import json
 import pytest
 from unittest.mock import patch, MagicMock
 from django.contrib.auth import get_user_model
+from django.test import override_settings
 
-from nutrition.models import Anamnese, DietPlan, Meal
+from nutrition.models import Anamnese, DietJob, DietPlan, Meal
 from nutrition.services import AIService
 
 User = get_user_model()
@@ -339,3 +341,115 @@ class TestGenerateDiet:
         mock_call.side_effect = [_make_passo1_response(), invalid_passo2]
         diet_plan = ai_service.generate_diet(anamnese)
         assert DietPlan.objects.filter(id=diet_plan.id).exists()
+
+
+# ---------------------------------------------------------------------------
+# Testes da task Celery — generate_diet_task
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+class TestGenerateDietTask:
+    """
+    Testa os fluxos da task Celery generate_diet_task:
+    status transitions, retry automático e tratamento de erros.
+    Roda de forma síncrona via CELERY_TASK_ALWAYS_EAGER=True nas test_settings.
+    """
+
+    @pytest.fixture
+    def job(self, anamnese):
+        return DietJob.objects.create(user=anamnese.user, anamnese=anamnese)
+
+    def _make_diet_plan(self, user):
+        return DietPlan.objects.create(
+            user=user, raw_response={}, total_calories=1800, goal_description='Teste'
+        )
+
+    @patch('nutrition.services.AIService.generate_diet')
+    def test_task_marca_job_como_done_em_sucesso(self, mock_generate, job, anamnese):
+        """Geração bem-sucedida deve transicionar o job para STATUS_DONE."""
+        mock_generate.return_value = self._make_diet_plan(anamnese.user)
+        from nutrition.tasks import generate_diet_task
+        generate_diet_task.delay(job.pk)
+
+        job.refresh_from_db()
+        assert job.status == DietJob.STATUS_DONE
+        assert job.diet_plan_id is not None
+
+    @patch('nutrition.services.AIService.generate_diet')
+    def test_task_marca_job_como_failed_em_excecao_generica(self, mock_generate, job):
+        """Exceção não tratada deve marcar o job como STATUS_FAILED."""
+        mock_generate.side_effect = Exception('Conexão recusada pela API')
+        from nutrition.tasks import generate_diet_task
+        generate_diet_task.delay(job.pk)
+
+        job.refresh_from_db()
+        assert job.status == DietJob.STATUS_FAILED
+        assert 'Conexão recusada pela API' in job.error_message
+
+    @patch('nutrition.services.AIService.generate_diet')
+    def test_task_ignora_job_com_status_diferente_de_pending(self, mock_generate, job):
+        """Job já em STATUS_DONE não deve ser reprocessado."""
+        from nutrition.models import DietJob
+        job.status = DietJob.STATUS_DONE
+        job.save()
+
+        from nutrition.tasks import generate_diet_task
+        generate_diet_task.delay(job.pk)
+
+        assert not mock_generate.called
+        job.refresh_from_db()
+        assert job.status == DietJob.STATUS_DONE
+
+    def test_task_job_inexistente_retorna_silenciosamente(self):
+        """DietJob.DoesNotExist não deve propagar exceção."""
+        from nutrition.tasks import generate_diet_task
+        generate_diet_task.delay(99999)  # não existe — deve ser ignorado silenciosamente
+
+    @override_settings(CELERY_TASK_EAGER_PROPAGATES=False)
+    @patch('nutrition.services.AIService.generate_diet')
+    def test_task_retry_em_erro_transitorio_e_sucesso_no_segundo(self, mock_generate, job, anamnese):
+        """ValueError com frase retryable deve disparar retry; deve completar no segundo attempt.
+        CELERY_TASK_EAGER_PROPAGATES=False é necessário para que self.retry() re-execute
+        a task em eager mode em vez de propagar a exceção Retry.
+        """
+        diet_plan = self._make_diet_plan(anamnese.user)
+        mock_generate.side_effect = [
+            ValueError('A IA retornou um json inválido. Tente novamente.'),
+            diet_plan,
+        ]
+
+        from nutrition.tasks import generate_diet_task
+        generate_diet_task.delay(job.pk)
+
+        job.refresh_from_db()
+        assert job.status == DietJob.STATUS_DONE
+        assert mock_generate.call_count == 2
+
+    @patch('nutrition.services.AIService.generate_diet')
+    def test_task_erro_nao_transitorio_falha_imediatamente(self, mock_generate, job):
+        """ValueError sem frase retryable deve ir direto para STATUS_FAILED sem retry."""
+        mock_generate.side_effect = ValueError('Dados da anamnese inválidos')
+
+        from nutrition.tasks import generate_diet_task
+        generate_diet_task.delay(job.pk)
+
+        job.refresh_from_db()
+        assert job.status == DietJob.STATUS_FAILED
+        assert mock_generate.call_count == 1  # sem retry
+
+    @override_settings(CELERY_TASK_EAGER_PROPAGATES=False)
+    @patch('nutrition.services.AIService.generate_diet')
+    def test_task_falha_definitiva_apos_max_retries(self, mock_generate, job):
+        """Após esgotar max_retries (2), o job deve terminar em STATUS_FAILED.
+        CELERY_TASK_EAGER_PROPAGATES=False permite que os retries sejam executados
+        em eager mode sem propagar a exceção Retry.
+        """
+        mock_generate.side_effect = ValueError('json inválido: unexpected token')
+
+        from nutrition.tasks import generate_diet_task
+        generate_diet_task.delay(job.pk)
+
+        job.refresh_from_db()
+        assert job.status == DietJob.STATUS_FAILED
+        # max_retries=2 → 3 chamadas no total (tentativa original + 2 retries)
+        assert mock_generate.call_count == 3

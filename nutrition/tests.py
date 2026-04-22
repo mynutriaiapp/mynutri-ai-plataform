@@ -464,7 +464,16 @@ class TestDietGet:
         response = client.get('/api/v1/diet')
         assert response.status_code == 200
         assert 'explanation' in response.data
-        assert response.data['explanation'] is not None
+        explanation = response.data['explanation']
+        assert explanation is not None
+        # Verifica que os 5 campos obrigatórios estão presentes e preenchidos
+        campos_obrigatorios = {
+            'calorie_calculation', 'macro_distribution',
+            'food_choices', 'meal_structure', 'goal_alignment',
+        }
+        for campo in campos_obrigatorios:
+            assert campo in explanation, f'Campo obrigatório ausente na explanation: {campo}'
+            assert explanation[campo], f'Campo da explanation está vazio: {campo}'
 
     def test_get_dieta_retorna_macros(self, auth_client, create_anamnese):
         client, user = auth_client
@@ -484,6 +493,87 @@ class TestDietGet:
         assert 'protein_g' in macros
         assert 'carbs_g' in macros
         assert 'fat_g' in macros
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/diet/status/<job_id>
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+class TestDietJobStatus:
+    """Testa o endpoint de polling do status de geração de dieta."""
+
+    def _make_job(self, user, status, anamnese=None, diet_plan=None, error=''):
+        from nutrition.models import DietJob
+        return DietJob.objects.create(
+            user=user,
+            anamnese=anamnese,
+            status=status,
+            diet_plan=diet_plan,
+            error_message=error,
+        )
+
+    def test_status_pendente_retorna_200_sem_diet_plan_id(self, auth_client, create_anamnese):
+        from nutrition.models import DietJob
+        client, user = auth_client
+        anamnese = create_anamnese(user=user)
+        job = self._make_job(user, DietJob.STATUS_PENDING, anamnese=anamnese)
+
+        response = client.get(f'/api/v1/diet/status/{job.pk}')
+        assert response.status_code == 200
+        assert response.data['status'] == DietJob.STATUS_PENDING
+        assert response.data['diet_plan_id'] is None
+
+    def test_status_done_retorna_diet_plan_id(self, auth_client, create_anamnese):
+        from nutrition.models import DietJob
+        client, user = auth_client
+        anamnese = create_anamnese(user=user)
+        plan = DietPlan.objects.create(
+            user=user, raw_response={}, total_calories=1800, goal_description='Teste',
+        )
+        job = self._make_job(user, DietJob.STATUS_DONE, anamnese=anamnese, diet_plan=plan)
+
+        response = client.get(f'/api/v1/diet/status/{job.pk}')
+        assert response.status_code == 200
+        assert response.data['status'] == DietJob.STATUS_DONE
+        assert response.data['diet_plan_id'] == plan.pk
+
+    def test_status_failed_retorna_mensagem_de_erro(self, auth_client, create_anamnese):
+        from nutrition.models import DietJob
+        client, user = auth_client
+        anamnese = create_anamnese(user=user)
+        job = self._make_job(
+            user, DietJob.STATUS_FAILED, anamnese=anamnese,
+            error='Falha ao contatar a API da IA: HTTP 429',
+        )
+
+        response = client.get(f'/api/v1/diet/status/{job.pk}')
+        assert response.status_code == 200
+        assert response.data['status'] == DietJob.STATUS_FAILED
+        assert 'error' in response.data
+        assert response.data['error'] == 'Falha ao contatar a API da IA: HTTP 429'
+
+    def test_status_job_outro_usuario_retorna_404(self, api_client, create_user, create_anamnese):
+        from nutrition.models import DietJob
+        user_a = create_user(email='a@job.com')
+        user_b = create_user(email='b@job.com')
+        anamnese_a = create_anamnese(user=user_a)
+        job = self._make_job(user_a, DietJob.STATUS_DONE, anamnese=anamnese_a)
+
+        refresh_b = RefreshToken.for_user(user_b)
+        api_client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh_b.access_token}')
+
+        response = api_client.get(f'/api/v1/diet/status/{job.pk}')
+        assert response.status_code == 404
+
+    def test_status_sem_autenticacao_retorna_401(self, api_client):
+        response = api_client.get('/api/v1/diet/status/999')
+        assert response.status_code == 401
+
+    def test_status_job_inexistente_retorna_404(self, auth_client):
+        client, _ = auth_client
+        response = client.get('/api/v1/diet/status/99999')
+        assert response.status_code == 404
 
 
 # ---------------------------------------------------------------------------

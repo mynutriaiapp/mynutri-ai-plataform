@@ -292,10 +292,14 @@ class TestNutritionDB:
         assert r['calories'] > 0
         assert r['protein_g'] > 10
 
-    def test_lookup_alimento_desconhecido_retorna_fallback(self):
+    def test_lookup_alimento_desconhecido_retorna_fallback_generico_exato(self):
+        """Fallback genérico (camada 4) deve retornar exatamente 150 kcal/100g."""
         from nutrition.nutrition_db import lookup_food_nutrition
-        r = lookup_food_nutrition('Alimento completamente desconhecido xyz', 100)
-        assert r['calories'] > 0  # fallback genérico
+        r = lookup_food_nutrition('xyzw_alimento_que_nunca_existira_abc123', 100)
+        assert r['calories'] == 150
+        assert r['protein_g'] == 8.0
+        assert r['carbs_g'] == 20.0
+        assert r['fat_g'] == 4.0
 
     def test_lookup_quantidade_zero(self):
         from nutrition.nutrition_db import lookup_food_nutrition
@@ -308,6 +312,28 @@ class TestNutritionDB:
         r200 = lookup_food_nutrition('Banana', 200)
         assert r200['calories'] == r100['calories'] * 2
         assert r200['protein_g'] == r100['protein_g'] * 2
+
+    def test_lookup_alimento_composto_wrap_frango_resolve_como_frango(self):
+        """
+        'Wrap de frango' faz match no token 'frango' e retorna macros de frango puro.
+        COMPORTAMENTO DOCUMENTADO: carbs_g = 0 (tortilha não está no banco separadamente).
+        Qualquer alteração nesta lógica deve ser consciente e intencional.
+        """
+        from nutrition.nutrition_db import lookup_food_nutrition
+        r = lookup_food_nutrition('Wrap de frango', 200)
+        assert r['protein_g'] > 0
+        assert r['carbs_g'] == 0.0   # frango puro — tortilha ignorada
+        assert r['calories'] > 0
+
+    def test_lookup_alimento_composto_pao_com_ovo_resolve_como_pao(self):
+        """
+        'Pão com ovo' faz match prioritário no token 'pão' e retorna macros de pão.
+        COMPORTAMENTO DOCUMENTADO: a proteína e gordura do ovo são ignoradas.
+        """
+        from nutrition.nutrition_db import lookup_food_nutrition
+        r = lookup_food_nutrition('Pão com ovo', 100)
+        assert r['carbs_g'] > 20    # pão tem carboidrato
+        assert r['calories'] > 0
 
 
 class TestRecalculateTotals:
@@ -389,7 +415,7 @@ class TestAdjustToCalorieTarget:
         assert result['meals'][0]['foods'][0]['quantity_g'] == 120
 
     def test_escala_quando_divergencia_maior_10_porcento(self, service):
-        """Divergência > 10% deve escalar quantity_g."""
+        """Divergência > 10% deve escalar quantity_g e recalcular calories via DB."""
         data = {
             'calories': 1000,
             'meals': [{'foods': [
@@ -400,6 +426,12 @@ class TestAdjustToCalorieTarget:
         result = service._adjust_to_calorie_target(data, target_calories=2000)
         # quantity_g deve ter dobrado (scale ≈ 2.0)
         assert result['meals'][0]['foods'][0]['quantity_g'] == 200
+        # calories deve ter sido recalculado via DB — não é o valor original escalado
+        # lookup_food_nutrition('Frango grelhado', 200) → 159*2 = 318 kcal (não 2000)
+        from nutrition.nutrition_db import lookup_food_nutrition
+        expected_per_food = lookup_food_nutrition('Frango grelhado', 200)['calories']
+        assert result['meals'][0]['foods'][0]['calories'] == expected_per_food
+        assert result['calories'] == expected_per_food  # único alimento → total igual
 
     def test_tolerancia_10_porcento_documentada(self, service):
         """9% de desvio está dentro da tolerância → não escala."""
@@ -486,6 +518,21 @@ class TestPipelineCompleto:
         service = AIService()
         with pytest.raises(ValueError, match='refeições válidas'):
             service.generate_diet(anamnese_obj)
+
+    @patch.object(AIService, '_call_api')
+    def test_pipeline_total_calories_coerente_com_meals(self, mock_call, anamnese_obj):
+        """
+        DietPlan.total_calories deve ser igual à soma de calories das Meals persistidas.
+        Detecta divergência entre o campo desnormalizado e as linhas filhas.
+        """
+        mock_call.side_effect = self._make_api_side_effects()
+        service = AIService()
+        diet_plan = service.generate_diet(anamnese_obj)
+
+        soma_meals = sum(meal.calories for meal in diet_plan.meals.all())
+        assert diet_plan.total_calories == soma_meals, (
+            f'total_calories={diet_plan.total_calories} diverge da soma das meals={soma_meals}'
+        )
 
 
 # ============================================================================
