@@ -735,13 +735,13 @@
             </svg>
             Como a IA montou sua dieta
           </button>
-          <button onclick="window.print()" class="btn-action btn-outline">
+          <button id="btn-download-pdf" class="btn-action btn-outline">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="6 9 6 2 18 2 18 9"/>
-              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
-              <rect x="6" y="14" width="12" height="8"/>
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
             </svg>
-            Imprimir / Salvar PDF
+            <span id="btn-pdf-label">Baixar PDF</span>
           </button>
         </div>
 
@@ -1414,6 +1414,45 @@
         showError(`Erro de conexão. Verifique se o servidor está rodando. Erro: ${err.message}`);
       }
     }
+
+    // ════════════════════════════════
+    //  DOWNLOAD PDF
+    // ════════════════════════════════
+    document.getElementById('btn-download-pdf').addEventListener('click', async () => {
+      const dietId = dietData?.id;
+      if (!dietId) return;
+
+      const btn   = document.getElementById('btn-download-pdf');
+      const label = document.getElementById('btn-pdf-label');
+      btn.disabled  = true;
+      label.textContent = 'Gerando PDF...';
+
+      try {
+        const res = await fetch(`${API_BASE}/diet/${dietId}/pdf`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+
+        if (!res.ok) {
+          alert('Não foi possível gerar o PDF. Tente novamente.');
+          return;
+        }
+
+        const blob = await res.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `mynutri-dieta.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch {
+        alert('Erro de conexão ao baixar o PDF.');
+      } finally {
+        btn.disabled      = false;
+        label.textContent = 'Baixar PDF';
+      }
+    });
 
     // ── Page transitions ──
     document.querySelectorAll('a[href]').forEach(link => {
