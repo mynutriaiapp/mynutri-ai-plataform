@@ -383,12 +383,72 @@
     }
     .sub-empty { font-size: .875rem; color: var(--gray-400); font-style: italic; }
 
+    /* Sub — botão de editar */
+    .sub-edit-btn {
+      margin-left: auto; flex-shrink: 0;
+      background: none; border: none; cursor: pointer;
+      color: var(--gray-300); padding: 3px 5px; border-radius: 5px; line-height: 1;
+      transition: color .15s, background .15s;
+    }
+    .sub-edit-btn:hover { color: var(--green-600); background: var(--green-50); }
+
+    /* Sub — linha em modo edição */
+    .sub-row--editing {
+      flex-direction: column;
+      background: var(--green-50); border: 1px solid var(--green-200);
+      border-radius: 8px; padding: 12px 14px; gap: 8px;
+    }
+    .sub-edit-label {
+      font-size: .6875rem; font-weight: 700; color: var(--green-700);
+      text-transform: uppercase; letter-spacing: .06em; margin: 0 0 4px;
+    }
+    .sub-edit-input {
+      width: 100%; padding: 7px 10px; box-sizing: border-box;
+      border: 1px solid var(--gray-200); border-radius: 6px;
+      font-size: .875rem; color: var(--gray-800); background: var(--white);
+      outline: none; transition: border-color .15s;
+    }
+    .sub-edit-input:focus { border-color: var(--green-500); }
+    .sub-edit-input.invalid { border-color: #dc2626; }
+    html.dark .sub-edit-input { background: var(--gray-50); border-color: var(--gray-200); color: var(--gray-800); }
+    .sub-edit-hint { font-size: .6875rem; color: var(--gray-400); margin: 3px 0 0; }
+    .sub-edit-actions { display: flex; gap: 8px; margin-top: 4px; }
+    .sub-btn-save {
+      padding: 6px 16px; border-radius: 6px; border: none; cursor: pointer;
+      background: var(--green-600); color: white; font-size: .8125rem; font-weight: 600;
+      transition: background .15s;
+    }
+    .sub-btn-save:hover:not(:disabled) { background: var(--green-700); }
+    .sub-btn-save:disabled { background: var(--gray-300); cursor: not-allowed; }
+    .sub-btn-cancel {
+      padding: 6px 16px; border-radius: 6px; cursor: pointer;
+      background: none; color: var(--gray-600);
+      border: 1px solid var(--gray-200); font-size: .8125rem;
+      transition: background .15s;
+    }
+    .sub-btn-cancel:hover { background: var(--gray-100); }
+
+    /* Toast de notificação */
+    .sub-toast {
+      position: fixed; bottom: 28px; left: 50%;
+      transform: translateX(-50%) translateY(16px);
+      background: var(--gray-900); color: white;
+      padding: 10px 22px; border-radius: 8px; font-size: .875rem;
+      z-index: 9999; pointer-events: none;
+      opacity: 0; transition: opacity .22s, transform .22s;
+      white-space: nowrap; box-shadow: 0 4px 16px rgba(0,0,0,.18);
+    }
+    .sub-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .sub-toast.success { background: var(--green-700); }
+    .sub-toast.error   { background: #dc2626; }
+
     /* Notes */
     .modal-notes {
       font-size: .875rem; color: var(--gray-600); line-height: 1.7;
       background: #fffbeb; border-radius: var(--radius-md);
       padding: 12px 14px;
     }
+    html.dark .modal-notes { background: #1c1a0a; color: var(--gray-500); }
 
     /* Responsive — mobile bottom-sheet feel */
     @media (max-width: 600px) {
@@ -856,6 +916,159 @@
     });
 
     // ════════════════════════════════
+    //  SUBSTITUIÇÕES — EDIÇÃO
+    // ════════════════════════════════
+
+    // rawFoods da refeição aberta — necessário para re-filtrar subs no cancelar/salvar
+    let _currentModalRawFoods = [];
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function showToast(msg, type = 'success') {
+      const t = document.getElementById('sub-toast');
+      t.textContent = msg;
+      t.className = `sub-toast ${type} show`;
+      clearTimeout(t._hideTimer);
+      t._hideTimer = setTimeout(() => t.classList.remove('show'), 2800);
+    }
+
+    function _subIndexInDiet(food) {
+      return (dietData.substitutions || []).findIndex(s => s.food === food);
+    }
+
+    function _computeSubsToShow() {
+      const allSubs  = dietData.substitutions || [];
+      const foodNames = _currentModalRawFoods.map(f => (f.name || '').toLowerCase());
+      const relevant  = allSubs.filter(s =>
+        foodNames.some(fn => fn.includes((s.food || '').toLowerCase().split(' ')[0]))
+      );
+      return relevant.length > 0 ? relevant : allSubs;
+    }
+
+    function renderSubstitutions(container) {
+      const subsToShow = _computeSubsToShow();
+      if (!subsToShow.length) {
+        container.innerHTML = '<p class="sub-empty">Nenhuma substituição registrada para esta refeição.</p>';
+        return;
+      }
+
+      container.innerHTML = subsToShow.map(s => {
+        const idx = _subIndexInDiet(s.food);
+        const alts = (s.alternatives || [])
+          .map(a => `<span class="sub-tag">${escapeHtml(a)}</span>`).join('');
+        return `
+          <div class="sub-row" data-sub-index="${idx}">
+            <span class="sub-from">${escapeHtml(s.food)}</span>
+            <svg class="sub-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+            </svg>
+            <div class="sub-tags">${alts}</div>
+            <button class="sub-edit-btn" data-sub-index="${idx}" title="Editar substituição" aria-label="Editar substituição de ${escapeHtml(s.food)}">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+          </div>`;
+      }).join('');
+
+      container.querySelectorAll('.sub-edit-btn').forEach(btn => {
+        btn.addEventListener('click', () => _openSubEdit(parseInt(btn.dataset.subIndex), container));
+      });
+    }
+
+    function _openSubEdit(idx, container) {
+      const s   = (dietData.substitutions || [])[idx];
+      if (!s) return;
+      const row = container.querySelector(`.sub-row[data-sub-index="${idx}"]`);
+      if (!row) return;
+
+      row.outerHTML = `
+        <div class="sub-row sub-row--editing" data-sub-index="${idx}">
+          <div>
+            <p class="sub-edit-label">Alimento</p>
+            <input class="sub-edit-input" id="sub-food-${idx}" type="text"
+                   value="${escapeHtml(s.food)}" maxlength="100" />
+          </div>
+          <div>
+            <p class="sub-edit-label">Substituições</p>
+            <input class="sub-edit-input" id="sub-alts-${idx}" type="text"
+                   value="${escapeHtml((s.alternatives || []).join(', '))}" maxlength="500" />
+            <p class="sub-edit-hint">Separe as opções por vírgula. Ex: Tofu, Peixe branco, Frango</p>
+          </div>
+          <div class="sub-edit-actions">
+            <button class="sub-btn-save"   id="sub-save-${idx}">Salvar</button>
+            <button class="sub-btn-cancel" id="sub-cancel-${idx}">Cancelar</button>
+          </div>
+        </div>`;
+
+      const foodInput = document.getElementById(`sub-food-${idx}`);
+      const altsInput = document.getElementById(`sub-alts-${idx}`);
+      const saveBtn   = document.getElementById(`sub-save-${idx}`);
+      const cancelBtn = document.getElementById(`sub-cancel-${idx}`);
+
+      foodInput.focus();
+
+      saveBtn.addEventListener('click', () => _saveSubEdit(idx, foodInput, altsInput, saveBtn, container));
+      cancelBtn.addEventListener('click', () => renderSubstitutions(container));
+
+      [foodInput, altsInput].forEach(input => {
+        input.addEventListener('keydown', e => {
+          if (e.key === 'Enter')  { e.preventDefault(); saveBtn.click(); }
+          if (e.key === 'Escape') cancelBtn.click();
+        });
+      });
+    }
+
+    async function _saveSubEdit(idx, foodInput, altsInput, saveBtn, container) {
+      const food = foodInput.value.trim();
+      const alts = altsInput.value.split(',').map(a => a.trim()).filter(Boolean);
+
+      if (!food) {
+        foodInput.classList.add('invalid');
+        foodInput.focus();
+        setTimeout(() => foodInput.classList.remove('invalid'), 2000);
+        return;
+      }
+      if (!alts.length) {
+        altsInput.classList.add('invalid');
+        altsInput.focus();
+        setTimeout(() => altsInput.classList.remove('invalid'), 2000);
+        return;
+      }
+
+      saveBtn.disabled     = true;
+      saveBtn.textContent  = 'Salvando…';
+
+      const updatedSubs = [...(dietData.substitutions || [])];
+      updatedSubs[idx]  = { food, alternatives: alts };
+
+      try {
+        const res = await fetch(`${API_BASE}/diet/${dietData.id}/substitutions`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ substitutions: updatedSubs }),
+        });
+
+        if (!res.ok) throw new Error('server');
+
+        const data = await res.json();
+        dietData.substitutions = data.substitutions;
+        renderSubstitutions(container);
+        showToast('Substituição atualizada com sucesso!', 'success');
+      } catch {
+        saveBtn.disabled    = false;
+        saveBtn.textContent = 'Salvar';
+        showToast('Não foi possível salvar. Tente novamente.', 'error');
+      }
+    }
+
+    // ════════════════════════════════
     //  MODAL
     // ════════════════════════════════
     const overlay   = document.getElementById('modal');
@@ -952,27 +1165,8 @@
       }
 
       // ── Substituições ──
-      // Show all substitutions if none match foods; filter otherwise
-      const foodNames = rawFoods.map(f => (f.name || '').toLowerCase());
-      const relevantSubs = allSubs.filter(s =>
-        foodNames.some(fn => fn.includes((s.food || '').toLowerCase().split(' ')[0]))
-      );
-      const subsToShow = relevantSubs.length > 0 ? relevantSubs : allSubs;
-      const subsList   = document.getElementById('modal-subs');
-
-      if (subsToShow.length > 0) {
-        subsList.innerHTML = subsToShow.map(s => `
-          <div class="sub-row">
-            <span class="sub-from">${s.food}</span>
-            <svg class="sub-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-            <div class="sub-tags">
-              ${(s.alternatives || []).map(a => `<span class="sub-tag">${a}</span>`).join('')}
-            </div>
-          </div>
-        `).join('');
-      } else {
-        subsList.innerHTML = `<p class="sub-empty">Nenhuma substituição registrada para esta refeição.</p>`;
-      }
+      _currentModalRawFoods = rawFoods;
+      renderSubstitutions(document.getElementById('modal-subs'));
 
       // ── Notes ──
       const notesSection = document.getElementById('modal-notes-section');
@@ -1458,5 +1652,6 @@
 
     loadDiet();
   </script>
+  <div class="sub-toast" id="sub-toast" role="status" aria-live="polite"></div>
 </body>
 </html>
