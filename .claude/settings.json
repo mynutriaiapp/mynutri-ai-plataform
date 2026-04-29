@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(findstr /V \"WARNING\\\\|INFO\\\\|DEBUG\")",
+      "Bash(git stash *)",
+      "Bash(python -m pytest nutrition/test_services.py::TestAdjustToCalorieTarget::test_com_grande_divergencia_escala_quantidades -x -q)",
+      "Bash(python -m pytest nutrition/test_services.py::TestAdjustToCalorieTarget::test_com_grande_divergencia_escala_quantidades -x -v)",
+      "Bash(python -m pytest nutrition/test_services.py::TestAdjustToCalorieTarget -x -v)",
+      "Bash(cp nutrition/services.py /tmp/services_with_my_edits.py)",
+      "Bash(cp /tmp/services_no_my_edits.py nutrition/services.py)",
+      "Bash(python -m pytest nutrition/test_critical.py -v -q)",
+      "Bash(python -m pytest nutrition/ --deselect nutrition/test_services.py::TestAdjustToCalorieTarget::test_com_grande_divergencia_escala_quantidades -q)",
+      "Bash(python -m pytest nutrition/test_critical.py -v --tb=short)",
+      "Bash(python -m pytest nutrition/test_critical.py::TestAnamneseSerializerBounds -v)",
+      "Bash(DJANGO_SETTINGS_MODULE=mynutri.settings python manage.py showmigrations nutrition)",
+      "Bash(python -m pytest -x -q)",
+      "Bash(python -m pytest nutrition/test_services.py::TestAdjustToCalorieTarget::test_com_grande_divergencia_escala_quantidades -v)",
+      "Bash(python -m pytest nutrition/test_services.py::TestAdjustToCalorieTarget::test_com_grande_divergencia_escala_quantidades -q)",
+      "Bash(python -m pytest nutrition/test_services.py::TestAdjustToCalorieTarget::test_com_grande_divergencia_escala_quantidades -v -s)",
+      "Read(//c/c/Users/gabri/OneDrive/Área de Trabalho/**)",
+      "Bash(git commit -m ' *)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
+    ]
+  }
+}
