@@ -117,7 +117,8 @@ Retorne exatamente neste formato JSON (sem texto adicional):
           "quantity_text": "3 unidades",
           "quantity_g": 150
         }}
-      ]
+      ],
+      "meal_notes": "1–2 dicas práticas e específicas sobre esta refeição (preparo, horário ideal, combinações, etc.)"
     }}
   ],
   "notes": "Dicas de hidratação, consistência e adesão ao plano."
@@ -475,7 +476,8 @@ Retorne EXATAMENTE este JSON (sem texto adicional):
       "quantity_text": "quantidade em texto",
       "quantity_g": 100
     }}
-  ]
+  ],
+  "meal_notes": "1–2 dicas práticas e específicas sobre esta refeição (preparo, horário ideal, combinações, etc.)"
 }}\
 """
 

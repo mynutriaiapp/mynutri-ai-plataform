@@ -6,209 +6,7 @@
   <title>Meu Perfil — MyNutri AI</title>
   <link rel="icon" type="image/png" href="/static/src/assets/mynutriai-logo.png" />
   <link rel="stylesheet" href="/static/src/styles/index.css" />
-  <style>
-    body { background: var(--gray-50); min-height: 100vh; }
-
-    .profile-page {
-      padding-top: calc(var(--header-h) + 48px);
-      padding-bottom: 72px;
-    }
-
-
-    /* ── Page grid ── */
-    .profile-grid {
-      display: grid;
-      grid-template-columns: 280px 1fr;
-      gap: 28px;
-      align-items: start;
-    }
-    @media (max-width: 768px) {
-      .profile-grid { grid-template-columns: 1fr; }
-    }
-
-    /* ── Sidebar card ── */
-    .sidebar-card {
-      background: var(--white);
-      border-radius: var(--radius-xl);
-      box-shadow: var(--shadow-md);
-      border: 1px solid var(--gray-100);
-      overflow: hidden;
-    }
-    .sidebar-top {
-      background: var(--gradient-primary);
-      padding: 32px 24px 28px;
-      text-align: center;
-    }
-    .avatar-large {
-      width: 80px; height: 80px; border-radius: 50%;
-      background: rgba(255,255,255,.25);
-      color: #fff; font-size: 2rem; font-weight: 700;
-      display: flex; align-items: center; justify-content: center;
-      margin: 0 auto 14px;
-      border: 3px solid rgba(255,255,255,.5);
-    }
-    .sidebar-name {
-      font-family: 'Outfit', sans-serif;
-      font-size: 1.125rem; font-weight: 700; color: #fff;
-      margin-bottom: 4px;
-    }
-    .sidebar-email { font-size: .8125rem; color: rgba(255,255,255,.8); }
-
-    .sidebar-nav { padding: 8px 0; }
-    .sidebar-nav-item {
-      display: flex; align-items: center; gap: 12px;
-      padding: 13px 20px;
-      font-size: .9rem; color: var(--gray-600);
-      cursor: pointer; transition: all .15s ease;
-      border-left: 3px solid transparent;
-      user-select: none;
-    }
-    .sidebar-nav-item:hover { background: var(--gray-50); color: var(--gray-800); }
-    .sidebar-nav-item.active {
-      background: var(--green-50); color: var(--green-700);
-      border-left-color: var(--green-500); font-weight: 600;
-    }
-    .sidebar-nav-item svg { flex-shrink: 0; opacity: .7; }
-    .sidebar-nav-item.active svg { opacity: 1; }
-
-    /* ── Content panels ── */
-    .panel { display: none; }
-    .panel.active { display: block; }
-
-    /* ── Card ── */
-    .card {
-      background: var(--white);
-      border-radius: var(--radius-xl);
-      box-shadow: var(--shadow-md);
-      border: 1px solid var(--gray-100);
-      padding: 32px;
-      margin-bottom: 20px;
-    }
-    .card-title {
-      font-family: 'Outfit', sans-serif;
-      font-size: 1.125rem; font-weight: 700;
-      color: var(--gray-800);
-      margin-bottom: 4px;
-    }
-    .card-subtitle { font-size: .875rem; color: var(--gray-500); margin-bottom: 28px; }
-
-    /* ── Form ── */
-    .form-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
-    }
-    @media (max-width: 560px) { .form-grid { grid-template-columns: 1fr; } }
-    .form-grid .full { grid-column: 1 / -1; }
-
-    .form-group { display: flex; flex-direction: column; gap: 6px; }
-    .form-label {
-      font-size: .8125rem; font-weight: 600;
-      color: var(--gray-600); letter-spacing: .02em;
-      text-transform: uppercase;
-    }
-    .form-input, .form-select {
-      padding: 11px 14px;
-      border: 1.5px solid var(--gray-200);
-      border-radius: var(--radius-md);
-      font-size: .9375rem; color: var(--gray-800);
-      background: var(--white);
-      transition: all .2s ease;
-      outline: none; width: 100%;
-    }
-    .form-input:focus, .form-select:focus {
-      border-color: var(--green-400);
-      box-shadow: 0 0 0 4px rgba(34,197,94,.1);
-    }
-    .form-input:read-only {
-      background: var(--gray-50); color: var(--gray-500);
-      cursor: not-allowed;
-    }
-    .form-hint { font-size: .8rem; color: var(--gray-400); }
-
-    .form-actions {
-      display: flex; align-items: center; gap: 12px;
-      margin-top: 8px; padding-top: 20px;
-      border-top: 1px solid var(--gray-100);
-    }
-
-    .btn-save {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 11px 28px;
-      background: var(--gradient-primary);
-      color: #fff; border: none; border-radius: var(--radius-md);
-      font-size: .9375rem; font-weight: 600; cursor: pointer;
-      box-shadow: var(--shadow-green);
-      transition: all var(--duration) var(--ease-out);
-    }
-    .btn-save:hover { transform: translateY(-2px); box-shadow: 0 14px 35px -5px rgba(34,197,94,.45); }
-    .btn-save:disabled { opacity: .6; cursor: not-allowed; transform: none; }
-
-    .btn-cancel {
-      padding: 11px 22px;
-      background: var(--white); color: var(--gray-600);
-      border: 1.5px solid var(--gray-200);
-      border-radius: var(--radius-md);
-      font-size: .9375rem; font-weight: 500; cursor: pointer;
-      transition: all .2s ease;
-    }
-    .btn-cancel:hover { border-color: var(--gray-400); color: var(--gray-800); }
-
-    /* ── Alerts ── */
-    .alert {
-      padding: 12px 16px; border-radius: var(--radius-md);
-      font-size: .875rem; font-weight: 500;
-      display: none; align-items: center; gap: 8px;
-      margin-bottom: 20px;
-    }
-    .alert.show { display: flex; }
-    .alert-success { background: var(--green-50); color: var(--green-700); border: 1px solid var(--green-200); }
-    .alert-error   { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
-
-    /* ── Nutritional info grid ── */
-    .info-grid {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 16px;
-    }
-    .info-item {
-      background: var(--gray-50);
-      border-radius: var(--radius-md);
-      padding: 16px;
-      border: 1px solid var(--gray-100);
-    }
-    .info-item-label { font-size: .75rem; font-weight: 600; color: var(--gray-500); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
-    .info-item-value { font-size: 1rem; font-weight: 600; color: var(--gray-800); }
-
-    .badge {
-      display: inline-block; padding: 4px 12px;
-      border-radius: var(--radius-full);
-      font-size: .8125rem; font-weight: 600;
-    }
-    .badge-green  { background: var(--green-100); color: var(--green-700); }
-    .badge-blue   { background: #dbeafe; color: #1d4ed8; }
-    .badge-purple { background: #f3e8ff; color: #7c3aed; }
-
-    .empty-state {
-      text-align: center; padding: 40px 20px; color: var(--gray-400);
-    }
-    .empty-state svg { margin-bottom: 12px; opacity: .5; }
-    .empty-state p { font-size: .9rem; margin-bottom: 16px; }
-
-    /* ── Password strength ── */
-    .password-strength { margin-top: 6px; }
-    .strength-bar { height: 4px; border-radius: 2px; background: var(--gray-200); overflow: hidden; }
-    .strength-fill { height: 100%; border-radius: 2px; transition: width .3s ease, background .3s ease; width: 0; }
-    .strength-label { font-size: .75rem; color: var(--gray-500); margin-top: 4px; }
-
-    /* ── Spinner ── */
-    .spinner-sm {
-      width: 16px; height: 16px;
-      border: 2px solid rgba(255,255,255,.4);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: spin .6s linear infinite;
-      display: none;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-  </style>
+  <link rel="stylesheet" href="/static/src/styles/perfil.css" />
 </head>
 <body>
 
@@ -460,6 +258,24 @@
 
     const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://127.0.0.1:8000/api/v1' : '/api/v1';
 
+    let _refreshing = null;
+    async function apiFetch(url, opts = {}) {
+      opts = { credentials: 'include', ...opts };
+      let res = await fetch(url, opts);
+      if (res.status !== 401) return res;
+      if (!_refreshing) {
+        _refreshing = fetch(`${API_BASE}/auth/token/refresh`, { method: 'POST', credentials: 'include' })
+          .finally(() => { _refreshing = null; });
+      }
+      const refreshRes = await _refreshing;
+      if (!refreshRes.ok) {
+        localStorage.removeItem('mynutri_user');
+        window.location.href = '/auth/';
+        return res;
+      }
+      return fetch(url, opts);
+    }
+
     /* ── Auth guard ── */
     let userData = JSON.parse(localStorage.getItem('mynutri_user') || 'null');
     if (!userData) { window.location.href = '/auth/'; }
@@ -532,7 +348,7 @@
     /* ── Load profile from API ── */
     async function loadProfile() {
       try {
-        const res = await fetch(`${API_BASE}/user/profile`, { credentials: 'include' });
+        const res = await apiFetch(`${API_BASE}/user/profile`);
 
         if (res.status === 401) { window.location.href = '/auth/'; return; }
         if (!res.ok) throw new Error('Erro ao carregar perfil');
@@ -584,10 +400,9 @@
       setLoading('btnSaveDados', 'spinnerDados', true);
 
       try {
-        const res = await fetch(`${API_BASE}/user/profile`, {
+        const res = await apiFetch(`${API_BASE}/user/profile`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
           body: JSON.stringify({ first_name, last_name, phone, date_of_birth }),
         });
 
@@ -630,7 +445,7 @@
       container.innerHTML = `<div style="display:flex;align-items:center;gap:10px;color:var(--gray-400);font-size:.9rem;"><div class="spinner" style="width:24px;height:24px;border-width:3px;"></div>Carregando…</div>`;
 
       try {
-        const res = await fetch(`${API_BASE}/anamnese`, { credentials: 'include' });
+        const res = await apiFetch(`${API_BASE}/anamnese`);
 
         if (res.status === 404 || res.status === 204) {
           container.innerHTML = `
@@ -739,10 +554,9 @@
       setLoading('btnSaveSenha', 'spinnerSenha', true);
 
       try {
-        const res = await fetch(`${API_BASE}/user/change-password`, {
+        const res = await apiFetch(`${API_BASE}/user/change-password`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
           body: JSON.stringify({ current_password: atual, new_password: nova }),
         });
 

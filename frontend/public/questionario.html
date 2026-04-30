@@ -662,6 +662,24 @@
       const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://127.0.0.1:8000/api/v1' : '/api/v1';
       const _user  = JSON.parse(localStorage.getItem('mynutri_user') || 'null');
 
+      let _refreshing = null;
+      async function apiFetch(url, opts = {}) {
+        opts = { credentials: 'include', ...opts };
+        let res = await fetch(url, opts);
+        if (res.status !== 401) return res;
+        if (!_refreshing) {
+          _refreshing = fetch(`${API_BASE}/auth/token/refresh`, { method: 'POST', credentials: 'include' })
+            .finally(() => { _refreshing = null; });
+        }
+        const refreshRes = await _refreshing;
+        if (!refreshRes.ok) {
+          localStorage.removeItem('mynutri_user');
+          window.location.href = '/auth/';
+          return res;
+        }
+        return fetch(url, opts);
+      }
+
       function _initials(name) {
         if (!name) return '?';
         return name.trim().split(/\s+/).slice(0, 2).map(w => w[0].toUpperCase()).join('');
@@ -788,10 +806,9 @@
         btnSubmit.style.pointerEvents = 'none';
 
         try {
-          const anamneseRes = await fetch(`${API_BASE}/anamnese`, {
+          const anamneseRes = await apiFetch(`${API_BASE}/anamnese`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
             body: JSON.stringify(collectFormData()),
           });
 
@@ -1066,7 +1083,7 @@
         if (_user?.nome) _fillInput('nome', _user.nome);
 
         try {
-          const res = await fetch(`${API_BASE}/anamnese/last`, { credentials: 'include' });
+          const res = await apiFetch(`${API_BASE}/anamnese/last`);
 
           if (!res.ok) return; // sem anamnese anterior — nome já foi preenchido acima
 

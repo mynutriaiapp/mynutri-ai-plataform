@@ -1,0 +1,142 @@
+body { background: var(--gray-50); min-height: 100vh; }
+
+.history-page {
+  padding-top: calc(var(--header-h) + 48px);
+  padding-bottom: 72px;
+  animation: contentSlideIn .38s cubic-bezier(.16,1,.3,1) both;
+}
+@keyframes contentSlideIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Page header ── */
+.page-header {
+  margin-bottom: 32px;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 16px;
+}
+.page-header-left h1 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.75rem; font-weight: 700;
+  color: var(--gray-900); margin-bottom: 4px;
+}
+.page-header-left p { font-size: .9375rem; color: var(--gray-500); }
+.btn-new-diet {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 11px 24px;
+  background: var(--gradient-primary);
+  color: #fff; border: none; border-radius: var(--radius-md);
+  font-size: .9375rem; font-weight: 600; cursor: pointer;
+  box-shadow: var(--shadow-green);
+  text-decoration: none;
+  transition: all var(--duration) var(--ease-out);
+}
+.btn-new-diet:hover { transform: translateY(-2px); box-shadow: 0 14px 35px -5px rgba(34,197,94,.45); }
+
+/* ── States ── */
+.state-center {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  min-height: 40vh; text-align: center; gap: 16px;
+}
+.spinner {
+  width: 44px; height: 44px;
+  border: 4px solid var(--green-200);
+  border-top-color: var(--green-500);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.state-title { font-family: 'Outfit', sans-serif; font-size: 1.125rem; font-weight: 600; color: var(--gray-700); }
+.state-subtitle { font-size: .9375rem; color: var(--gray-500); max-width: 380px; }
+
+/* ── History list ── */
+.history-list {
+  display: flex; flex-direction: column; gap: 14px;
+}
+
+/* ── Diet card ── */
+.diet-card {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  border: 1.5px solid var(--gray-100);
+  box-shadow: var(--shadow-sm);
+  padding: 20px 24px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 20px; flex-wrap: wrap;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.diet-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--green-200);
+}
+.diet-card-left { display: flex; align-items: center; gap: 16px; flex: 1; min-width: 0; }
+
+.diet-icon {
+  width: 46px; height: 46px; border-radius: var(--radius-md);
+  background: var(--green-50); color: var(--green-600);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+
+.diet-info { min-width: 0; }
+.diet-date {
+  font-size: .8125rem; color: var(--gray-400);
+  margin-bottom: 3px;
+}
+.diet-goal {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1rem; font-weight: 600;
+  color: var(--gray-800);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.diet-card-meta {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.meta-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 12px; border-radius: 999px;
+  font-size: .8125rem; font-weight: 600;
+  background: var(--gray-100); color: var(--gray-600);
+}
+.meta-pill.calories { background: var(--green-50); color: var(--green-700); }
+.meta-pill.protein  { background: #dcfce7; color: #15803d; }
+.meta-pill.carbs    { background: #fef9c3; color: #854d0e; }
+.meta-pill.fat      { background: #dbeafe; color: #1d4ed8; }
+
+.diet-card-arrow {
+  color: var(--gray-300); flex-shrink: 0;
+  transition: color .18s ease, transform .18s ease;
+}
+.diet-card:hover .diet-card-arrow { color: var(--green-500); transform: translateX(3px); }
+
+/* ── Count badge ── */
+.count-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 14px; border-radius: 999px;
+  font-size: .8125rem; font-weight: 600;
+  background: var(--green-50); color: var(--green-700);
+  border: 1px solid var(--green-200);
+  margin-bottom: 24px;
+}
+
+/* ── Dark mode ── */
+html.dark .diet-card { background: var(--bg-secondary); border-color: var(--border-color); }
+html.dark .diet-goal { color: var(--text-primary); }
+html.dark .diet-date { color: var(--text-secondary); }
+html.dark .meta-pill { background: rgba(255,255,255,.08); color: var(--text-secondary); }
+html.dark .meta-pill.calories { background: rgba(34,197,94,.12); color: #86efac; }
+html.dark .meta-pill.protein  { background: rgba(34,197,94,.1);  color: #86efac; }
+html.dark .meta-pill.carbs    { background: rgba(234,179,8,.1);  color: #fde047; }
+html.dark .meta-pill.fat      { background: rgba(59,130,246,.1); color: #93c5fd; }
+html.dark .diet-icon { background: rgba(34,197,94,.12); color: #86efac; }
+html.dark .state-title { color: var(--text-primary); }
+html.dark .state-subtitle { color: var(--text-secondary); }
+html.dark .page-header-left h1 { color: var(--text-primary); }
+html.dark .page-header-left p { color: var(--text-secondary); }

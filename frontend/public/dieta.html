@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
@@ -7,1497 +7,7 @@
   <meta name="description" content="Seu plano alimentar personalizado gerado por inteligência artificial." />
   <link rel="icon" type="image/png" href="/static/src/assets/mynutriai-logo.png" />
   <link rel="stylesheet" href="/static/src/styles/index.css" />
-  <style>
-    body { background: var(--gray-50); min-height: 100vh; }
-
-    /* Slide de entrada aplicado ao conteúdo, nunca ao body,
-       para não quebrar position:fixed do modal */
-    .diet-page {
-      padding-top: calc(var(--header-h) + 40px);
-      padding-bottom: 60px;
-      animation: contentSlideIn .38s cubic-bezier(.16,1,.3,1) both;
-    }
-
-    @keyframes contentSlideIn {
-      from { opacity: 0; transform: translateY(14px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    /* ── States ── */
-    .state-center {
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      min-height: 68vh; text-align: center; gap: 16px;
-    }
-    .spinner {
-      width: 48px; height: 48px;
-      border: 4px solid var(--green-200);
-      border-top-color: var(--green-500);
-      border-radius: 50%;
-      animation: spin .8s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .state-title   { font-family: 'Outfit', sans-serif; font-size: 1.25rem; font-weight: 600; color: var(--gray-700); }
-    .state-subtitle{ font-size: .9375rem; color: var(--gray-500); max-width: 400px; }
-
-    /* ── Diet Header Banner — Hero ── */
-    .diet-header-section {
-      position: relative;
-      background:
-        radial-gradient(ellipse 80% 60% at 85% -10%, rgba(74,222,128,.55), transparent 60%),
-        radial-gradient(ellipse 60% 70% at 5% 110%, rgba(45,212,191,.50), transparent 60%),
-        radial-gradient(ellipse 40% 30% at 50% 50%, rgba(34,197,94,.18), transparent 70%),
-        var(--gradient-primary);
-      color: var(--white);
-      border-radius: var(--radius-xl);
-      padding: 44px 46px;
-      margin-bottom: 32px;
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 28px; flex-wrap: wrap;
-      overflow: hidden;
-      isolation: isolate;
-      box-shadow:
-        inset 0 1px 0 rgba(255,255,255,.22),
-        inset 0 -1px 0 rgba(0,0,0,.10),
-        0 28px 56px -22px rgba(20, 83, 45, .60),
-        0 6px 18px rgba(20, 83, 45, .14);
-    }
-
-    /* Blobs/orbs flutuantes no fundo */
-    .diet-header-section::before,
-    .diet-header-section::after {
-      content: '';
-      position: absolute;
-      border-radius: 50%;
-      filter: blur(60px);
-      z-index: -1;
-      pointer-events: none;
-    }
-    .diet-header-section::before {
-      width: 360px; height: 360px;
-      background: radial-gradient(circle, #4ade80 0%, transparent 70%);
-      opacity: .55;
-      top: -140px; right: -100px;
-      animation: blobDrift 14s ease-in-out infinite;
-    }
-    .diet-header-section::after {
-      width: 300px; height: 300px;
-      background: radial-gradient(circle, #2dd4bf 0%, transparent 70%);
-      opacity: .50;
-      bottom: -150px; left: 16%;
-      animation: blobDrift 18s ease-in-out infinite reverse;
-    }
-    @keyframes blobDrift {
-      0%, 100% { transform: translate(0, 0) scale(1); }
-      50%      { transform: translate(40px, 24px) scale(1.14); }
-    }
-
-    /* Padrão de pontos sutil sobreposto */
-    .diet-header-grid {
-      position: absolute; inset: 0;
-      background-image:
-        radial-gradient(circle, rgba(255,255,255,.18) 1px, transparent 1.4px);
-      background-size: 22px 22px;
-      mask-image: radial-gradient(ellipse at center, #000 30%, transparent 80%);
-      -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 80%);
-      opacity: .55;
-      z-index: 0;
-      pointer-events: none;
-    }
-
-    /* Brilho diagonal que atravessa o banner */
-    .diet-header-shine {
-      position: absolute; top: 0; bottom: 0;
-      left: -40%; width: 35%;
-      background: linear-gradient(
-        100deg,
-        transparent 0%,
-        rgba(255,255,255,.10) 45%,
-        rgba(255,255,255,.18) 50%,
-        rgba(255,255,255,.10) 55%,
-        transparent 100%
-      );
-      transform: skewX(-18deg);
-      animation: headerShine 7s ease-in-out 1.2s infinite;
-      z-index: 0;
-      pointer-events: none;
-    }
-    @keyframes headerShine {
-      0%   { left: -40%; opacity: 0; }
-      10%  { opacity: 1; }
-      55%  { left: 130%; opacity: 1; }
-      60%, 100% { left: 130%; opacity: 0; }
-    }
-
-    /* Sparkles flutuantes */
-    .diet-header-sparkles {
-      position: absolute; inset: 0;
-      pointer-events: none;
-      z-index: 0;
-    }
-    .diet-header-sparkles .spark {
-      position: absolute;
-      color: rgba(255,255,255,.85);
-      filter: drop-shadow(0 0 6px rgba(255,255,255,.55));
-      opacity: 0;
-      animation: sparkFloat 6s ease-in-out infinite;
-    }
-    .diet-header-sparkles .spark svg { display: block; }
-    .diet-header-sparkles .spark.s1 { top: 22%; left: 42%; animation-delay: .4s; }
-    .diet-header-sparkles .spark.s2 { top: 68%; left: 36%; animation-delay: 2.2s; }
-    .diet-header-sparkles .spark.s3 { top: 14%; left: 62%; animation-delay: 3.6s; }
-    .diet-header-sparkles .spark.s4 { top: 78%; left: 58%; animation-delay: 5s; }
-    @keyframes sparkFloat {
-      0%      { opacity: 0; transform: translateY(0) scale(.6) rotate(0); }
-      20%     { opacity: 1; transform: translateY(-4px) scale(1) rotate(20deg); }
-      55%     { opacity: .9; transform: translateY(-12px) scale(1.15) rotate(45deg); }
-      85%     { opacity: 0; transform: translateY(-20px) scale(.7) rotate(70deg); }
-      100%    { opacity: 0; transform: translateY(-20px) scale(.7) rotate(70deg); }
-    }
-
-    .diet-header-section > .diet-header-left,
-    .diet-header-section > .diet-stats { position: relative; z-index: 2; }
-
-    /* Coluna esquerda */
-    .diet-header-left { max-width: 480px; }
-    .diet-header-left > * {
-      animation: dietHeaderIn .55s cubic-bezier(.16,1,.3,1) both;
-    }
-    .diet-header-left > *:nth-child(1) { animation-delay: .05s; }
-    .diet-header-left > *:nth-child(2) { animation-delay: .14s; }
-    .diet-header-left > *:nth-child(3) { animation-delay: .22s; }
-    @keyframes dietHeaderIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    .diet-header-left h1 {
-      font-family: 'Outfit', sans-serif;
-      font-size: 2.125rem; font-weight: 700;
-      margin-bottom: 10px;
-      line-height: 1.12;
-      letter-spacing: -.015em;
-      text-shadow: 0 2px 18px rgba(0,0,0,.18);
-    }
-    .diet-header-left h1 .accent {
-      background: linear-gradient(120deg, #ffffff 0%, #d1fae5 50%, #a7f3d0 100%);
-      -webkit-background-clip: text; background-clip: text;
-      -webkit-text-fill-color: transparent;
-      filter: drop-shadow(0 0 18px rgba(187,247,208,.35));
-    }
-    .diet-header-left p {
-      font-size: .9375rem;
-      opacity: .94;
-      line-height: 1.55;
-      max-width: 440px;
-    }
-
-    /* Tag "Powered by AI" */
-    .diet-ai-tag {
-      position: relative;
-      display: inline-flex; align-items: center; gap: 8px;
-      background: linear-gradient(135deg, rgba(255,255,255,.22), rgba(255,255,255,.10));
-      border: 1px solid rgba(255,255,255,.32);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      color: #fff;
-      font-size: .6875rem; font-weight: 700;
-      letter-spacing: .12em; text-transform: uppercase;
-      padding: 7px 14px; border-radius: 999px;
-      margin-bottom: 16px;
-      box-shadow:
-        inset 0 1px 0 rgba(255,255,255,.28),
-        0 4px 14px rgba(0,0,0,.10);
-    }
-    .diet-ai-tag .ai-spark {
-      width: 13px; height: 13px;
-      color: #fef9c3;
-      filter: drop-shadow(0 0 6px rgba(254,249,195,.7));
-      animation: aiSparkSpin 4s linear infinite;
-    }
-    @keyframes aiSparkSpin {
-      0%   { transform: rotate(0)    scale(1); }
-      50%  { transform: rotate(180deg) scale(1.2); }
-      100% { transform: rotate(360deg) scale(1); }
-    }
-    .diet-ai-tag .ai-dot {
-      width: 6px; height: 6px; border-radius: 50%;
-      background: #bbf7d0;
-      box-shadow: 0 0 0 0 rgba(187,247,208,.85);
-      animation: aiPulse 2.2s ease-out infinite;
-    }
-    @keyframes aiPulse {
-      0%   { box-shadow: 0 0 0 0 rgba(187,247,208,.85); }
-      70%  { box-shadow: 0 0 0 9px rgba(187,247,208,0); }
-      100% { box-shadow: 0 0 0 0 rgba(187,247,208,0); }
-    }
-
-    /* Stats */
-    .diet-stats { display: flex; gap: 14px; flex-wrap: wrap; }
-    .stat-card {
-      position: relative;
-      background:
-        linear-gradient(155deg, rgba(255,255,255,.22) 0%, rgba(255,255,255,.08) 100%);
-      border: 1px solid rgba(255,255,255,.28);
-      border-radius: var(--radius-lg);
-      padding: 18px 24px 16px;
-      text-align: left;
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      min-width: 140px;
-      overflow: hidden;
-      box-shadow:
-        inset 0 1px 0 rgba(255,255,255,.30),
-        0 10px 24px -10px rgba(0,0,0,.18);
-      transition: transform .3s cubic-bezier(.16,1,.3,1),
-                  background .3s ease, border-color .3s ease,
-                  box-shadow .3s ease;
-      animation: dietHeaderIn .55s cubic-bezier(.16,1,.3,1) both;
-    }
-    .stat-card:nth-child(1) { animation-delay: .28s; }
-    .stat-card:nth-child(2) { animation-delay: .36s; }
-    /* Sheen interno — luz superior */
-    .stat-card::before {
-      content: '';
-      position: absolute; inset: 0;
-      background: linear-gradient(160deg, rgba(255,255,255,.22) 0%, transparent 55%);
-      pointer-events: none;
-    }
-    /* Hover sheen — luz que cruza o card */
-    .stat-card::after {
-      content: '';
-      position: absolute; top: 0; bottom: 0; left: -75%;
-      width: 50%;
-      background: linear-gradient(100deg,
-        transparent 0%,
-        rgba(255,255,255,.18) 50%,
-        transparent 100%);
-      transform: skewX(-20deg);
-      transition: left .7s cubic-bezier(.16,1,.3,1);
-      pointer-events: none;
-    }
-    .stat-card:hover {
-      transform: translateY(-5px);
-      background:
-        linear-gradient(155deg, rgba(255,255,255,.30) 0%, rgba(255,255,255,.14) 100%);
-      border-color: rgba(255,255,255,.42);
-      box-shadow:
-        inset 0 1px 0 rgba(255,255,255,.36),
-        0 18px 32px -12px rgba(0,0,0,.28);
-    }
-    .stat-card:hover::after { left: 130%; }
-
-    .stat-icon {
-      width: 32px; height: 32px;
-      border-radius: 10px;
-      background: linear-gradient(140deg, rgba(255,255,255,.32), rgba(255,255,255,.14));
-      border: 1px solid rgba(255,255,255,.22);
-      display: inline-flex; align-items: center; justify-content: center;
-      margin-bottom: 12px;
-      color: #fff;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.30);
-    }
-    .stat-icon svg { width: 16px; height: 16px; }
-
-    .stat-value {
-      font-family: 'Outfit', sans-serif;
-      font-size: 1.875rem; font-weight: 700;
-      display: block; line-height: 1;
-      letter-spacing: -.025em;
-      text-shadow: 0 2px 14px rgba(0,0,0,.20);
-      background: linear-gradient(180deg, #ffffff 0%, #ecfdf5 100%);
-      -webkit-background-clip: text; background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .stat-label {
-      font-size: .6875rem;
-      opacity: .88;
-      text-transform: uppercase;
-      letter-spacing: .1em;
-      margin-top: 7px;
-      display: inline-block;
-      font-weight: 700;
-    }
-
-    /* ── Goal Badge ── */
-    .goal-badge {
-      display: inline-flex; align-items: center; gap: 8px;
-      background: var(--green-50); color: var(--green-800);
-      border: 1px solid var(--green-200);
-      padding: 10px 20px; border-radius: 999px;
-      font-size: .875rem; font-weight: 600; margin-bottom: 28px;
-    }
-
-    /* ── Macros Summary Bar ── */
-    /* ══════════════════════════════
-       MACROS DO DIA — v2
-    ══════════════════════════════ */
-    .macros-bar {
-      background: var(--white); border-radius: var(--radius-lg);
-      border: 1px solid var(--gray-100); box-shadow: var(--shadow-sm);
-      padding: 22px 24px; margin-bottom: 28px; display: none;
-    }
-    .macros-bar.visible { display: block; }
-
-    /* Cabeçalho */
-    .mb-top {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 16px;
-    }
-    .mb-label {
-      font-size: .6875rem; font-weight: 700; color: var(--gray-400);
-      text-transform: uppercase; letter-spacing: .08em;
-    }
-    .mb-total {
-      font-size: .75rem; font-weight: 600; color: var(--gray-500);
-    }
-
-    /* Barra proporcional */
-    .mb-split-bar {
-      height: 8px; border-radius: 99px; overflow: visible;
-      display: flex; gap: 3px; margin-bottom: 10px;
-      /* revela da esquerda para direita na entrada */
-      clip-path: inset(0 100% 0 0 round 99px);
-      animation: mbBarReveal .75s cubic-bezier(.16,1,.3,1) .1s forwards;
-    }
-    @keyframes mbBarReveal {
-      to { clip-path: inset(0 0% 0 0 round 99px); }
-    }
-
-    .mb-seg {
-      border-radius: 99px; min-width: 5px; cursor: pointer;
-      position: relative;
-      transition: opacity .2s ease, transform .2s ease;
-    }
-    /* brilho interno */
-    .mb-seg::after {
-      content: ''; position: absolute; inset: 0; border-radius: inherit;
-      background: linear-gradient(180deg, rgba(255,255,255,.40) 0%, transparent 55%);
-      pointer-events: none;
-    }
-    .mb-seg.p { background: linear-gradient(90deg, #16a34a, #22c55e); }
-    .mb-seg.c { background: linear-gradient(90deg, #d97706, #f59e0b); }
-    .mb-seg.f { background: linear-gradient(90deg, #1d4ed8, #3b82f6); }
-
-    /* quando outro segmento está em foco, esmaece os demais */
-    .mb-split-bar.has-focus .mb-seg          { opacity: .25; transform: scaleY(.85); }
-    .mb-split-bar.has-focus .mb-seg.mb-focus { opacity: 1;   transform: scaleY(1); }
-
-    /* Legenda */
-    .mb-legend {
-      display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 18px;
-    }
-    .mb-legend-item {
-      display: flex; align-items: center; gap: 5px;
-      font-size: .6875rem; font-weight: 600; color: var(--gray-400);
-    }
-    .mb-legend-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-    .mb-legend-dot.p { background: #22c55e; }
-    .mb-legend-dot.c { background: #f59e0b; }
-    .mb-legend-dot.f { background: #3b82f6; }
-
-    /* Cards */
-    .mb-cards {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
-    }
-
-    @keyframes mbCardIn {
-      from { opacity: 0; transform: translateY(10px) scale(.97); }
-      to   { opacity: 1; transform: translateY(0)   scale(1);    }
-    }
-    .mb-card {
-      border-radius: var(--radius-md); padding: 16px 16px 0;
-      overflow: hidden; cursor: default;
-      transition: transform .22s cubic-bezier(.16,1,.3,1),
-                  box-shadow .22s ease;
-      animation: mbCardIn .4s cubic-bezier(.16,1,.3,1) both;
-    }
-    .mb-card:nth-child(1) { animation-delay: .28s; }
-    .mb-card:nth-child(2) { animation-delay: .36s; }
-    .mb-card:nth-child(3) { animation-delay: .44s; }
-
-    .mb-card:hover { transform: translateY(-6px); }
-
-    .mb-card.p {
-      background: linear-gradient(145deg, #f0fdf4 0%, #dcfce7 100%);
-      border: 1px solid #bbf7d0;
-    }
-    .mb-card.p:hover { box-shadow: 0 14px 32px rgba(22,163,74,.18); }
-
-    .mb-card.c {
-      background: linear-gradient(145deg, #fffbeb 0%, #fef3c7 100%);
-      border: 1px solid #fde68a;
-    }
-    .mb-card.c:hover { box-shadow: 0 14px 32px rgba(217,119,6,.18); }
-
-    .mb-card.f {
-      background: linear-gradient(145deg, #eff6ff 0%, #dbeafe 100%);
-      border: 1px solid #bfdbfe;
-    }
-    .mb-card.f:hover { box-shadow: 0 14px 32px rgba(37,99,235,.18); }
-
-    /* cards: foco vindo da barra */
-    .macros-bar.has-focus .mb-card {
-      opacity: .35; transform: translateY(0); box-shadow: none;
-      transition: opacity .2s ease, transform .22s cubic-bezier(.16,1,.3,1), box-shadow .22s ease;
-    }
-    .macros-bar.has-focus .mb-card.mb-focus {
-      opacity: 1; transform: translateY(-5px);
-    }
-    .macros-bar.has-focus .mb-card.p.mb-focus { box-shadow: 0 12px 28px rgba(22,163,74,.22); }
-    .macros-bar.has-focus .mb-card.c.mb-focus { box-shadow: 0 12px 28px rgba(217,119,6,.22); }
-    .macros-bar.has-focus .mb-card.f.mb-focus { box-shadow: 0 12px 28px rgba(37,99,235,.22); }
-    .macros-bar.has-focus .mb-card.mb-focus .mb-card-bar { height: 6px; }
-
-    .mb-card-name {
-      font-size: .625rem; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .08em; margin-bottom: 10px;
-      display: flex; align-items: center; gap: 5px;
-    }
-    .mb-card.p .mb-card-name { color: #15803d; }
-    .mb-card.c .mb-card-name { color: #92400e; }
-    .mb-card.f .mb-card-name { color: #1e40af; }
-
-    .mb-card-value {
-      font-family: 'Outfit', sans-serif;
-      font-size: 1.75rem; font-weight: 700; line-height: 1;
-      margin-bottom: 5px;
-    }
-    .mb-card.p .mb-card-value { color: #15803d; }
-    .mb-card.c .mb-card-value { color: #92400e; }
-    .mb-card.f .mb-card-value { color: #1e40af; }
-
-    .mb-card-unit { font-size: .6875rem; font-weight: 500; opacity: .6; }
-
-    .mb-card-footer {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 10px 0 13px;
-    }
-    .mb-card-kcal { font-size: .6875rem; color: var(--gray-400); }
-    .mb-card-pct  {
-      font-size: .625rem; font-weight: 700;
-      padding: 2px 8px; border-radius: 999px;
-    }
-    .mb-card.p .mb-card-pct { background: #bbf7d0; color: #15803d; }
-    .mb-card.c .mb-card-pct { background: #fde68a; color: #92400e; }
-    .mb-card.f .mb-card-pct { background: #bfdbfe; color: #1e40af; }
-
-    /* barra colorida na base do card */
-    .mb-card-bar {
-      height: 4px; margin: 0 -16px;
-      transition: height .2s ease;
-    }
-    .mb-card.p .mb-card-bar { background: linear-gradient(90deg, #16a34a, #4ade80); }
-    .mb-card.c .mb-card-bar { background: linear-gradient(90deg, #d97706, #fbbf24); }
-    .mb-card.f .mb-card-bar { background: linear-gradient(90deg, #1d4ed8, #60a5fa); }
-    .mb-card:hover .mb-card-bar,
-    .mb-card.mb-card-focus .mb-card-bar { height: 6px; }
-
-    /* Tooltip da barra */
-    .mb-tooltip {
-      position: fixed; z-index: 9999;
-      background: rgba(15,23,42,.93); color: #fff;
-      padding: 7px 13px; border-radius: 8px;
-      font-size: .75rem; font-weight: 500;
-      pointer-events: none; white-space: nowrap;
-      opacity: 0; transform: translateY(5px);
-      transition: opacity .14s, transform .14s;
-      backdrop-filter: blur(6px);
-      box-shadow: 0 4px 16px rgba(0,0,0,.22);
-    }
-    .mb-tooltip.show { opacity: 1; transform: translateY(0); }
-
-    @media (max-width: 480px) {
-      .mb-cards      { gap: 8px; }
-      .mb-card       { padding: 12px 12px 0; }
-      .mb-card-bar   { margin: 0 -12px; }
-      .mb-card-value { font-size: 1.375rem; }
-    }
-
-    /* ══════════════════════════════
-       MACROS — Dark Mode
-    ══════════════════════════════ */
-    html.dark .macros-bar {
-      background: #0f172a;
-      border-color: #1e293b;
-      box-shadow: 0 1px 4px rgba(0,0,0,.5);
-    }
-
-    /* Cards: superfície escura + tint colorido */
-    html.dark .mb-card {
-      background: #1a2438;
-      border-color: #243049;
-    }
-
-    /* Proteína */
-    html.dark .mb-card.p {
-      background: linear-gradient(145deg, #0f2318 0%, #162d20 100%);
-      border-color: rgba(74,222,128,.18);
-    }
-    html.dark .mb-card.p .mb-card-name  { color: #4ade80; }
-    html.dark .mb-card.p .mb-card-value { color: #86efac; }
-    html.dark .mb-card.p .mb-card-pct  { background: rgba(74,222,128,.15); color: #86efac; }
-    html.dark .mb-card.p:hover          { box-shadow: 0 14px 32px rgba(74,222,128,.2); }
-    html.dark .macros-bar.has-focus .mb-card.p.mb-focus { box-shadow: 0 12px 28px rgba(74,222,128,.22); }
-
-    /* Carboidratos */
-    html.dark .mb-card.c {
-      background: linear-gradient(145deg, #211700 0%, #2c2000 100%);
-      border-color: rgba(251,191,36,.18);
-    }
-    html.dark .mb-card.c .mb-card-name  { color: #fbbf24; }
-    html.dark .mb-card.c .mb-card-value { color: #fde68a; }
-    html.dark .mb-card.c .mb-card-pct  { background: rgba(251,191,36,.15); color: #fde68a; }
-    html.dark .mb-card.c:hover          { box-shadow: 0 14px 32px rgba(251,191,36,.2); }
-    html.dark .macros-bar.has-focus .mb-card.c.mb-focus { box-shadow: 0 12px 28px rgba(251,191,36,.22); }
-
-    /* Gordura */
-    html.dark .mb-card.f {
-      background: linear-gradient(145deg, #0a1428 0%, #0e1c38 100%);
-      border-color: rgba(96,165,250,.18);
-    }
-    html.dark .mb-card.f .mb-card-name  { color: #60a5fa; }
-    html.dark .mb-card.f .mb-card-value { color: #93c5fd; }
-    html.dark .mb-card.f .mb-card-pct  { background: rgba(96,165,250,.15); color: #93c5fd; }
-    html.dark .mb-card.f:hover          { box-shadow: 0 14px 32px rgba(96,165,250,.2); }
-    html.dark .macros-bar.has-focus .mb-card.f.mb-focus { box-shadow: 0 12px 28px rgba(96,165,250,.22); }
-
-    /* Textos auxiliares */
-    html.dark .mb-card-kcal  { color: #475569; }
-    html.dark .mb-label      { color: #334155; }
-    html.dark .mb-total      { color: #475569; }
-    html.dark .mb-legend-item { color: #475569; }
-
-    /* Dimming em dark */
-    html.dark .macros-bar.has-focus .mb-card { opacity: .3; }
-    html.dark .macros-bar.has-focus .mb-card.mb-focus { opacity: 1; }
-
-    /* Tooltip invertido (legível no escuro) */
-    html.dark .mb-tooltip {
-      background: rgba(241,245,249,.96);
-      color: #0f172a;
-      box-shadow: 0 4px 16px rgba(0,0,0,.55);
-    }
-
-    /* ── Section Header ── */
-    .section-header {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 22px; gap: 12px; flex-wrap: wrap;
-    }
-    .section-title {
-      font-family: 'Outfit', sans-serif; font-size: 1.125rem;
-      font-weight: 700; color: var(--gray-900); margin: 0;
-      display: flex; align-items: center; gap: 10px;
-    }
-    .section-title-hint {
-      font-size: .75rem; font-weight: 500; color: var(--gray-400);
-      letter-spacing: 0;
-    }
-    .meals-count-badge {
-      background: var(--green-100); color: var(--green-700);
-      border-radius: 999px; font-size: .6875rem; font-weight: 700;
-      padding: 3px 10px; letter-spacing: .02em;
-    }
-
-    /* ── Meals Grid ── */
-    .meals-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 18px;
-      margin-bottom: 36px;
-    }
-
-    /* ── Meal Card ── */
-    .meal-card {
-      background: var(--white);
-      border-radius: 20px;
-      border: 1.5px solid var(--gray-100);
-      overflow: hidden;
-      cursor: pointer;
-      transition: transform .25s cubic-bezier(.16,1,.3,1),
-                  box-shadow .25s ease,
-                  border-color .25s ease;
-      display: flex; flex-direction: column;
-      outline: none;
-      opacity: 0;
-      animation: mealCardIn .5s cubic-bezier(.16,1,.3,1) forwards;
-      box-shadow: 0 2px 10px rgba(0,0,0,.05);
-    }
-    @keyframes mealCardIn {
-      from { opacity: 0; transform: translateY(20px) scale(.96); }
-      to   { opacity: 1; transform: translateY(0)    scale(1); }
-    }
-
-    /* accent color vars by meal index */
-    .meal-card[data-meal-color="0"] { --mc: #ea580c; --mcl: #fff7ed; --mcb: #fed7aa; --mcg: linear-gradient(135deg,#fff7ed,#ffedd5); }
-    .meal-card[data-meal-color="1"] { --mc: #0d9488; --mcl: #f0fdfa; --mcb: #5eead4; --mcg: linear-gradient(135deg,#f0fdfa,#ccfbf1); }
-    .meal-card[data-meal-color="2"] { --mc: #16a34a; --mcl: #f0fdf4; --mcb: #86efac; --mcg: linear-gradient(135deg,#f0fdf4,#dcfce7); }
-    .meal-card[data-meal-color="3"] { --mc: #7c3aed; --mcl: #fdf4ff; --mcb: #c4b5fd; --mcg: linear-gradient(135deg,#fdf4ff,#f3e8ff); }
-    .meal-card[data-meal-color="4"] { --mc: #1d4ed8; --mcl: #eff6ff; --mcb: #93c5fd; --mcg: linear-gradient(135deg,#eff6ff,#dbeafe); }
-    .meal-card[data-meal-color="5"] { --mc: #be185d; --mcl: #fdf2f8; --mcb: #f9a8d4; --mcg: linear-gradient(135deg,#fdf2f8,#fce7f3); }
-    .meal-card[data-meal-color="6"] { --mc: #0369a1; --mcl: #f0f9ff; --mcb: #7dd3fc; --mcg: linear-gradient(135deg,#f0f9ff,#e0f2fe); }
-    .meal-card[data-meal-color="7"] { --mc: #6d28d9; --mcl: #f5f3ff; --mcb: #a78bfa; --mcg: linear-gradient(135deg,#f5f3ff,#ede9fe); }
-
-    .meal-card:hover, .meal-card:focus-visible {
-      transform: translateY(-6px);
-      border-color: var(--mcb);
-      box-shadow: 0 18px 44px -10px rgba(0,0,0,.14), 0 0 0 1px var(--mcb);
-    }
-    .meal-card:active { transform: translateY(-2px); }
-
-    /* Header zone */
-    .meal-card-header {
-      padding: 20px 20px 16px;
-      background: var(--mcg, linear-gradient(135deg,#f0fdf4,#dcfce7));
-      position: relative;
-      overflow: hidden;
-    }
-    .meal-card-header-top {
-      display: flex; align-items: flex-start; justify-content: space-between;
-      margin-bottom: 12px; position: relative; z-index: 1;
-    }
-    .meal-emoji-wrap {
-      width: 50px; height: 50px;
-      background: rgba(255,255,255,.85);
-      backdrop-filter: blur(8px);
-      border-radius: 14px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.625rem; line-height: 1;
-      box-shadow: 0 2px 10px rgba(0,0,0,.10), inset 0 1px 0 rgba(255,255,255,.9);
-      flex-shrink: 0;
-      border: 1.5px solid rgba(255,255,255,.6);
-      transition: transform .2s ease;
-    }
-    .meal-card:hover .meal-emoji-wrap { transform: scale(1.08) rotate(-3deg); }
-
-    .meal-kcal-badge {
-      display: inline-flex; align-items: center; gap: 5px;
-      background: var(--mc, var(--green-700));
-      color: white;
-      padding: 5px 12px; border-radius: 999px;
-      font-size: .75rem; font-weight: 700;
-      box-shadow: 0 3px 10px rgba(0,0,0,.18);
-      flex-shrink: 0;
-    }
-    .meal-card-header-bottom { position: relative; z-index: 1; }
-    .meal-order-label {
-      font-size: .625rem; font-weight: 700;
-      color: var(--mc, var(--green-600));
-      text-transform: uppercase; letter-spacing: .1em;
-      margin-bottom: 4px;
-      display: flex; align-items: center; gap: 5px;
-    }
-    .meal-order-dot {
-      width: 5px; height: 5px; border-radius: 50%;
-      background: var(--mc, var(--green-600));
-      flex-shrink: 0;
-    }
-    .meal-name {
-      font-family: 'Outfit', sans-serif; font-size: 1.0625rem;
-      font-weight: 700; color: var(--gray-900); line-height: 1.25;
-      margin-bottom: 8px;
-    }
-    .meal-time-tag {
-      display: inline-flex; align-items: center; gap: 4px;
-      background: rgba(0,0,0,.07);
-      border-radius: 999px; padding: 3px 9px;
-      font-size: .6875rem; font-weight: 600;
-      color: var(--gray-700);
-    }
-
-    /* Food chips */
-    .meal-card-body {
-      padding: 14px 20px 0;
-      flex: 1;
-    }
-    .meal-chips {
-      display: flex; flex-wrap: wrap; gap: 5px;
-    }
-    .meal-chip {
-      background: var(--gray-100);
-      color: var(--gray-600);
-      border-radius: 999px;
-      padding: 3px 10px;
-      font-size: .6875rem; font-weight: 500;
-      white-space: nowrap;
-      max-width: 140px; overflow: hidden; text-overflow: ellipsis;
-    }
-    .meal-chip-more {
-      background: var(--mcl, var(--green-50));
-      color: var(--mc, var(--green-700));
-      border-radius: 999px;
-      padding: 3px 10px;
-      font-size: .6875rem; font-weight: 700;
-      white-space: nowrap;
-    }
-
-    /* Separator */
-    .meal-card-sep {
-      height: 1px; background: var(--gray-100);
-      margin: 14px 20px 0;
-    }
-
-    /* Footer — CTA only */
-    .meal-card-footer {
-      padding: 12px 20px 18px;
-    }
-    .meal-detail-link {
-      display: flex; align-items: center; justify-content: space-between;
-      font-size: .8125rem; font-weight: 600;
-      color: var(--mc, var(--green-600));
-    }
-    .meal-detail-arrow {
-      width: 28px; height: 28px;
-      background: var(--mc, var(--green-600));
-      color: white; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      transition: transform .22s cubic-bezier(.16,1,.3,1);
-      flex-shrink: 0;
-    }
-    .meal-card:hover .meal-detail-arrow { transform: translateX(4px); }
-
-    /* Dark mode meal cards */
-    /* Dark mode — fundo neutro para todos os cards, cor apenas no accent e borda */
-    html.dark .meal-card { background: #111827; border-color: #1f2937; }
-    html.dark .meal-card[data-meal-color] { --mcg: linear-gradient(135deg, #161d2a 0%, #111827 100%); --mcl: #1f2937; }
-    html.dark .meal-card:hover { border-color: var(--mcb); }
-    html.dark .meal-emoji-wrap { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.10); }
-    html.dark .meal-name { color: #f1f5f9; }
-    html.dark .meal-chip { background: rgba(255,255,255,.07); color: #94a3b8; }
-    html.dark .meal-card-sep { background: #1f2937; }
-    html.dark .meal-time-tag { background: rgba(255,255,255,.08); color: #94a3b8; }
-    html.dark .meal-detail-link { color: var(--mcb, #86efac); }
-    html.dark .meal-detail-arrow { background: var(--mc, var(--green-600)); }
-    html.dark .section-title { color: #f1f5f9; }
-    html.dark .meals-count-badge { background: rgba(74,222,128,.15); color: #4ade80; }
-    html.dark .section-title-hint { color: #475569; }
-
-    /* ── Notes Box ── */
-    .notes-box {
-      background: #fffbeb; border: 1px solid #fde68a;
-      border-radius: var(--radius-lg);
-      padding: 16px 20px;
-      display: none; gap: 12px; align-items: flex-start;
-      margin-bottom: 28px;
-    }
-    .notes-box.visible { display: flex; }
-    .notes-box-icon { font-size: 1.125rem; flex-shrink: 0; margin-top: 1px; }
-    .notes-box-text { font-size: .875rem; color: #92400e; line-height: 1.65; white-space: pre-line; }
-
-    /* ── Actions ── */
-    .diet-actions { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; }
-    .btn-action {
-      padding: 12px 28px; border-radius: var(--radius-md);
-      font-size: .9375rem; font-weight: 600; cursor: pointer;
-      transition: all .2s ease; border: none;
-      display: inline-flex; align-items: center; gap: 8px;
-    }
-    .btn-primary { background: var(--gradient-primary); color: var(--white); box-shadow: var(--shadow-green); }
-    .btn-primary:hover { transform: translateY(-2px); }
-    .btn-outline { background: var(--white); color: var(--gray-700); border: 1px solid var(--gray-200); box-shadow: var(--shadow-sm); }
-    .btn-outline:hover { background: var(--gray-50); }
-
-    .diet-meta { font-size: .8125rem; color: var(--gray-400); margin-top: 32px; text-align: center; }
-
-    /* ════════════════════════════════
-       MODAL
-    ════════════════════════════════ */
-    /* isolation: isolate → novo stacking context, position:fixed funciona mesmo com transform no body */
-    .modal-overlay {
-      position: fixed; inset: 0; z-index: 9000;
-      isolation: isolate;
-      background: rgba(0,0,0,.55);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      display: flex; align-items: center; justify-content: center;
-      padding: 20px;
-      opacity: 0; pointer-events: none;
-      transition: opacity .25s ease;
-      will-change: opacity;
-    }
-    .modal-overlay.open { opacity: 1; pointer-events: all; }
-
-    .modal-box {
-      background: var(--white);
-      border-radius: 24px;
-      width: 100%; max-width: 560px; max-height: 88vh;
-      display: flex; flex-direction: column; overflow: hidden;
-      box-shadow: 0 32px 80px rgba(0,0,0,.28), 0 0 0 1px rgba(0,0,0,.06);
-      transform: translateY(28px) scale(.96);
-      opacity: 0;
-      transition: transform .34s cubic-bezier(.16,1,.3,1), opacity .26s ease;
-      will-change: transform, opacity;
-    }
-    .modal-overlay.open .modal-box { transform: translateY(0) scale(1); opacity: 1; }
-
-    /* ── Hero Header ── */
-    .modal-header {
-      position: relative; flex-shrink: 0;
-      padding: 52px 24px 22px;
-      background: var(--modal-mcg, linear-gradient(135deg,#f0fdf4,#dcfce7));
-      overflow: hidden;
-    }
-
-    /* close btn — absolute top-right inside hero */
-    .modal-close {
-      position: absolute; top: 14px; right: 14px;
-      width: 32px; height: 32px; border-radius: 50%;
-      border: none; background: rgba(0,0,0,.10);
-      cursor: pointer; z-index: 2;
-      display: flex; align-items: center; justify-content: center;
-      color: rgba(0,0,0,.55);
-      transition: background .15s, transform .2s cubic-bezier(.16,1,.3,1);
-    }
-    .modal-close:hover { background: rgba(0,0,0,.18); transform: scale(1.1) rotate(90deg); }
-
-    /* emoji bubble */
-    .modal-header-emoji {
-      position: absolute; top: 16px; left: 24px;
-      width: 58px; height: 58px;
-      background: rgba(255,255,255,.75);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border: 2px solid rgba(255,255,255,.6);
-      border-radius: 18px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.875rem; line-height: 1;
-      box-shadow: 0 4px 18px rgba(0,0,0,.12);
-    }
-
-    .modal-header-info { position: relative; z-index: 1; }
-    .modal-header-order {
-      font-size: .625rem; font-weight: 700;
-      color: var(--modal-mc, var(--green-700));
-      text-transform: uppercase; letter-spacing: .12em;
-      margin-bottom: 5px;
-      display: flex; align-items: center; gap: 6px;
-    }
-    .modal-header-order::before {
-      content: ''; width: 5px; height: 5px; border-radius: 50%;
-      background: var(--modal-mc, var(--green-600)); flex-shrink: 0;
-    }
-    .modal-header-name {
-      font-family: 'Outfit', sans-serif;
-      font-size: 1.375rem; font-weight: 700;
-      color: var(--gray-900); line-height: 1.2; margin-bottom: 12px;
-    }
-    .modal-header-meta {
-      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-    }
-    .modal-time-tag {
-      display: inline-flex; align-items: center; gap: 5px;
-      background: rgba(255,255,255,.65);
-      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-      border: 1px solid rgba(255,255,255,.5);
-      border-radius: 999px; padding: 5px 13px;
-      font-size: .75rem; font-weight: 600; color: var(--gray-700);
-    }
-    .modal-kcal-tag {
-      display: inline-flex; align-items: center; gap: 5px;
-      background: var(--modal-mc, var(--green-700));
-      color: white; border-radius: 999px; padding: 5px 14px;
-      font-size: .75rem; font-weight: 700;
-      box-shadow: 0 2px 10px rgba(0,0,0,.18);
-    }
-
-    /* ── Modal Body ── */
-    .modal-body { overflow-y: auto; flex: 1; }
-    .modal-body::-webkit-scrollbar { width: 5px; }
-    .modal-body::-webkit-scrollbar-track { background: transparent; }
-    .modal-body::-webkit-scrollbar-thumb { background: var(--gray-200); border-radius: 3px; }
-
-    /* ── Sections ── */
-    .modal-section { padding: 20px 24px; border-bottom: 1px solid var(--gray-50); }
-    .modal-section:last-child { border-bottom: none; }
-    .modal-section-label {
-      font-size: .625rem; font-weight: 700;
-      color: var(--gray-400); text-transform: uppercase;
-      letter-spacing: .10em; margin-bottom: 14px;
-      display: flex; align-items: center; gap: 8px;
-    }
-    .modal-section-label::before {
-      content: ''; width: 3px; height: 14px; border-radius: 99px;
-      background: var(--modal-mc, var(--green-500));
-      display: inline-block; flex-shrink: 0;
-    }
-
-    /* ── Food Items ── */
-    .foods-list { display: flex; flex-direction: column; gap: 7px; }
-
-    @keyframes foodItemIn {
-      from { opacity: 0; transform: translateX(-12px); }
-      to   { opacity: 1; transform: translateX(0); }
-    }
-
-    .food-item {
-      background: var(--gray-50);
-      border: 1.5px solid var(--gray-100);
-      border-radius: 14px;
-      overflow: hidden;
-      cursor: pointer;
-      opacity: 0;
-      animation: foodItemIn .32s cubic-bezier(.16,1,.3,1) forwards;
-      transition: border-color .2s ease, box-shadow .2s ease, transform .2s cubic-bezier(.16,1,.3,1);
-      user-select: none;
-    }
-    .food-item:hover {
-      border-color: var(--modal-mcb, var(--green-200));
-      box-shadow: 0 4px 16px rgba(0,0,0,.07);
-      transform: translateX(3px);
-    }
-    .food-item.fi-expanded {
-      background: var(--white);
-      border-color: var(--modal-mcb, var(--green-200));
-      box-shadow: 0 6px 20px rgba(0,0,0,.08);
-    }
-
-    .food-item-main {
-      display: flex; align-items: center; gap: 11px;
-      padding: 11px 14px;
-    }
-
-
-    .food-item-info { flex: 1; min-width: 0; }
-    .food-item-name {
-      font-weight: 600; font-size: .9375rem; color: var(--gray-800);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;
-    }
-    .food-item-qty {
-      font-size: .8125rem; color: var(--gray-600); font-weight: 600;
-      display: block; margin-top: 3px;
-    }
-
-    .food-item-right {
-      display: flex; flex-direction: column; align-items: flex-end;
-      flex-shrink: 0; gap: 3px;
-    }
-    .food-item-kcal {
-      font-size: .9375rem; font-weight: 700;
-      color: var(--modal-mc, var(--green-700)); white-space: nowrap;
-    }
-    .food-item-kcal span { font-size: .75rem; font-weight: 500; opacity: .7; }
-    .food-item-chevron {
-      color: var(--gray-300);
-      transition: transform .28s cubic-bezier(.16,1,.3,1), color .15s;
-      flex-shrink: 0;
-    }
-    .food-item:hover .food-item-chevron { color: var(--modal-mc, var(--green-500)); }
-    .food-item.fi-expanded .food-item-chevron { transform: rotate(180deg); color: var(--modal-mc, var(--green-500)); }
-
-
-    /* Expanded macro row */
-    .food-item-macros {
-      display: grid; grid-template-columns: repeat(3,1fr); gap: 6px;
-      padding: 0 14px 13px;
-      max-height: 0; overflow: hidden;
-      opacity: 0;
-      transition: max-height .3s cubic-bezier(.16,1,.3,1), opacity .25s ease, padding .3s ease;
-    }
-    .food-item.fi-expanded .food-item-macros {
-      max-height: 80px; opacity: 1;
-    }
-    .food-mpill {
-      background: var(--white);
-      border-radius: 9px; padding: 7px 8px; text-align: center;
-      border: 1px solid var(--gray-100);
-    }
-    .food-item.fi-expanded .food-mpill { border-color: var(--gray-100); }
-    .food-mpill-val {
-      font-family: 'Outfit', sans-serif; font-size: .9375rem;
-      font-weight: 700; display: block; line-height: 1;
-    }
-    .food-mpill.p .food-mpill-val { color: #15803d; }
-    .food-mpill.c .food-mpill-val { color: #92400e; }
-    .food-mpill.f .food-mpill-val { color: #1e40af; }
-    .food-mpill-val small { font-size: .625rem; font-weight: 500; opacity: .7; }
-    .food-mpill-lbl {
-      font-size: .5625rem; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .06em; color: var(--gray-400); display: block; margin-top: 3px;
-    }
-
-    .food-item-empty {
-      font-size: .875rem; color: var(--gray-400); font-style: italic; padding: 10px 4px;
-    }
-
-    /* dark mode food items */
-    html.dark .food-item { background: #1a2232; border-color: #253045; }
-    html.dark .food-item:hover { border-color: var(--modal-mcb, #86efac); box-shadow: 0 4px 16px rgba(0,0,0,.3); }
-    html.dark .food-item.fi-expanded { background: #111827; border-color: var(--modal-mcb, #86efac); }
-    html.dark .food-item-name { color: #f1f5f9; }
-    html.dark .food-item-qty { color: #94a3b8; }
-    html.dark .food-mpill { background: #161d2a; border-color: #253045; }
-    html.dark .food-mpill.p .food-mpill-val { color: #86efac; }
-    html.dark .food-mpill.c .food-mpill-val { color: #fde68a; }
-    html.dark .food-mpill.f .food-mpill-val { color: #93c5fd; }
-
-    /* ── Macro Cards ── */
-    .meal-macros-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
-    .meal-macro-card {
-      border-radius: 14px; padding: 14px 10px 12px; text-align: center;
-      transition: transform .2s cubic-bezier(.16,1,.3,1), box-shadow .2s ease;
-    }
-    .meal-macro-card:hover { transform: translateY(-3px); }
-    .meal-macro-card.p {
-      background: linear-gradient(145deg,#f0fdf4,#dcfce7); border: 1px solid #bbf7d0;
-    }
-    .meal-macro-card.p:hover { box-shadow: 0 8px 24px rgba(22,163,74,.18); }
-    .meal-macro-card.c {
-      background: linear-gradient(145deg,#fffbeb,#fef3c7); border: 1px solid #fde68a;
-    }
-    .meal-macro-card.c:hover { box-shadow: 0 8px 24px rgba(217,119,6,.18); }
-    .meal-macro-card.f {
-      background: linear-gradient(145deg,#eff6ff,#dbeafe); border: 1px solid #bfdbfe;
-    }
-    .meal-macro-card.f:hover { box-shadow: 0 8px 24px rgba(37,99,235,.18); }
-    .meal-macro-value {
-      font-family: 'Outfit', sans-serif; font-size: 1.5rem;
-      font-weight: 700; line-height: 1; display: block;
-    }
-    .meal-macro-card.p .meal-macro-value { color: #15803d; }
-    .meal-macro-card.c .meal-macro-value { color: #92400e; }
-    .meal-macro-card.f .meal-macro-value { color: #1e40af; }
-    .meal-macro-value small { font-size: .6875rem; font-weight: 500; opacity: .7; }
-    .meal-macro-label {
-      font-size: .625rem; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .07em; margin-top: 5px; display: block;
-    }
-    .meal-macro-card.p .meal-macro-label { color: #15803d; }
-    .meal-macro-card.c .meal-macro-label { color: #92400e; }
-    .meal-macro-card.f .meal-macro-label { color: #1e40af; }
-    .meal-macro-bar { height: 3px; border-radius: 99px; margin-top: 8px; }
-    .meal-macro-bar.p { background: linear-gradient(90deg,#16a34a,#4ade80); }
-    .meal-macro-bar.c { background: linear-gradient(90deg,#d97706,#fbbf24); }
-    .meal-macro-bar.f { background: linear-gradient(90deg,#1d4ed8,#60a5fa); }
-
-    /* ── Dark mode modal ── */
-    html.dark .modal-box { background: #111827; }
-    html.dark .modal-header { background: #161d2a; }
-    html.dark .modal-close { background: rgba(255,255,255,.10); color: rgba(255,255,255,.6); }
-    html.dark .modal-close:hover { background: rgba(255,255,255,.18); }
-    html.dark .modal-header-emoji { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.12); }
-    html.dark .modal-header-name { color: #f1f5f9; }
-    html.dark .modal-time-tag { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.10); color: #94a3b8; }
-    html.dark .modal-section { border-color: #1f2937; }
-    html.dark .meal-macro-card.p { background: linear-gradient(145deg,#0f2318,#162d20); border-color: rgba(74,222,128,.2); }
-    html.dark .meal-macro-card.p .meal-macro-value { color: #86efac; }
-    html.dark .meal-macro-card.p .meal-macro-label { color: #4ade80; }
-    html.dark .meal-macro-card.c { background: linear-gradient(145deg,#211700,#2c2000); border-color: rgba(251,191,36,.2); }
-    html.dark .meal-macro-card.c .meal-macro-value { color: #fde68a; }
-    html.dark .meal-macro-card.c .meal-macro-label { color: #fbbf24; }
-    html.dark .meal-macro-card.f { background: linear-gradient(145deg,#0a1428,#0e1c38); border-color: rgba(96,165,250,.2); }
-    html.dark .meal-macro-card.f .meal-macro-value { color: #93c5fd; }
-    html.dark .meal-macro-card.f .meal-macro-label { color: #60a5fa; }
-
-    /* ── Substituições ── */
-    @keyframes subRowIn {
-      from { opacity: 0; transform: translateY(8px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    .subs-list { display: flex; flex-direction: column; gap: 8px; }
-
-    .sub-row {
-      border: 1.5px solid var(--gray-100);
-      border-radius: 14px;
-      overflow: hidden;
-      transition: border-color .2s ease, box-shadow .2s ease;
-      opacity: 0;
-      animation: subRowIn .3s cubic-bezier(.16,1,.3,1) forwards;
-    }
-    .sub-row:hover {
-      border-color: var(--modal-mcb, var(--green-200));
-      box-shadow: 0 4px 16px rgba(0,0,0,.06);
-    }
-
-    /* Cabeçalho: alimento original */
-    .sub-header {
-      display: flex; align-items: center; gap: 10px;
-      padding: 12px 14px 10px;
-    }
-    .sub-food-wrap { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; }
-    .sub-from {
-      font-size: .9375rem; font-weight: 700; color: var(--gray-800);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .sub-from-qty {
-      font-size: .6875rem; font-weight: 600;
-      color: var(--modal-mc, var(--green-700));
-      background: var(--modal-mcl, var(--green-50));
-      border: 1px solid var(--modal-mcb, var(--green-100));
-      padding: 1px 7px; border-radius: 999px;
-      white-space: nowrap; flex-shrink: 0;
-    }
-
-    /* Botão editar — visível só no hover */
-    .sub-edit-btn {
-      flex-shrink: 0; background: none; border: none; cursor: pointer;
-      width: 28px; height: 28px; border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      color: var(--gray-300);
-      opacity: 0;
-      transition: opacity .15s, color .15s, background .15s;
-    }
-    .sub-row:hover .sub-edit-btn { opacity: 1; }
-    .sub-edit-btn:hover { color: var(--modal-mc, var(--green-600)); background: var(--modal-mcl, var(--green-50)); }
-
-    /* Divisor fino */
-    .sub-divider {
-      height: 1px; background: var(--gray-100); margin: 0 14px;
-    }
-
-    /* Tags de alternativas */
-    .sub-tags {
-      display: flex; flex-wrap: wrap; gap: 6px;
-      padding: 10px 14px 12px;
-    }
-    .sub-tag {
-      background: var(--gray-50);
-      color: var(--gray-600);
-      border: 1.5px solid var(--gray-150, #e5e7eb);
-      padding: 5px 13px; border-radius: 999px;
-      font-size: .8125rem; font-weight: 500;
-      cursor: default;
-      transition: background .18s ease, border-color .18s ease,
-                  color .18s ease, transform .18s cubic-bezier(.16,1,.3,1),
-                  box-shadow .18s ease;
-    }
-    .sub-tag:hover {
-      background: var(--modal-mcl, var(--green-50));
-      border-color: var(--modal-mcb, var(--green-200));
-      color: var(--modal-mc, var(--green-700));
-      transform: translateY(-2px);
-      box-shadow: 0 4px 10px rgba(0,0,0,.08);
-    }
-
-    .sub-empty {
-      font-size: .875rem; color: var(--gray-400);
-      font-style: italic; padding: 4px 2px;
-    }
-
-    /* Dark mode substituições */
-    html.dark .sub-row { border-color: #1f2937; }
-    html.dark .sub-row:hover { border-color: var(--modal-mcb, #4ade80); }
-    html.dark .sub-from { color: #f1f5f9; }
-    html.dark .sub-divider { background: #1f2937; }
-    html.dark .sub-tag { background: #1a2232; border-color: #253045; color: #94a3b8; }
-    html.dark .sub-tag:hover {
-      background: var(--modal-mcl, rgba(74,222,128,.1));
-      border-color: var(--modal-mcb, rgba(74,222,128,.3));
-      color: var(--modal-mc, #4ade80);
-    }
-
-    /* ── Modo edição ── */
-    .sub-row--editing {
-      border-color: var(--modal-mcb, var(--green-200)) !important;
-      box-shadow: 0 0 0 3px var(--modal-mcl, rgba(34,197,94,.12)) !important;
-    }
-    .sub-edit-fields { padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; }
-    .sub-edit-field { display: flex; flex-direction: column; gap: 5px; }
-    .sub-edit-label {
-      font-size: .625rem; font-weight: 700; color: var(--gray-400);
-      text-transform: uppercase; letter-spacing: .10em;
-    }
-    .sub-edit-input {
-      width: 100%; padding: 9px 12px; box-sizing: border-box;
-      border: 1.5px solid var(--gray-200); border-radius: 10px;
-      font-size: .875rem; color: var(--gray-800); background: var(--white);
-      outline: none; transition: border-color .15s, box-shadow .15s;
-      font-family: inherit;
-    }
-    .sub-edit-input:focus {
-      border-color: var(--modal-mc, var(--green-500));
-      box-shadow: 0 0 0 3px var(--modal-mcl, rgba(34,197,94,.15));
-    }
-    .sub-edit-input.invalid { border-color: #dc2626; }
-    html.dark .sub-edit-input { background: #111827; border-color: #253045; color: #f1f5f9; }
-    html.dark .sub-edit-input:focus { border-color: var(--modal-mc, #4ade80); }
-    .sub-edit-hint { font-size: .6875rem; color: var(--gray-400); }
-    .sub-edit-actions { display: flex; gap: 8px; padding: 0 14px 14px; }
-    .sub-btn-save {
-      padding: 7px 18px; border-radius: 8px; border: none; cursor: pointer;
-      background: var(--modal-mc, var(--green-600)); color: white;
-      font-size: .8125rem; font-weight: 600;
-      transition: opacity .15s, transform .15s;
-    }
-    .sub-btn-save:hover:not(:disabled) { opacity: .88; transform: translateY(-1px); }
-    .sub-btn-save:disabled { background: var(--gray-200); color: var(--gray-400); cursor: not-allowed; }
-    .sub-btn-cancel {
-      padding: 7px 16px; border-radius: 8px; cursor: pointer;
-      background: none; color: var(--gray-500);
-      border: 1.5px solid var(--gray-200); font-size: .8125rem;
-      transition: background .15s, border-color .15s;
-    }
-    .sub-btn-cancel:hover { background: var(--gray-50); border-color: var(--gray-300); }
-
-    /* Toast de notificação */
-    .sub-toast {
-      position: fixed; bottom: 28px; left: 50%;
-      transform: translateX(-50%) translateY(16px);
-      background: var(--gray-900); color: white;
-      padding: 10px 22px; border-radius: 8px; font-size: .875rem;
-      z-index: 9999; pointer-events: none;
-      opacity: 0; transition: opacity .22s, transform .22s;
-      white-space: nowrap; box-shadow: 0 4px 16px rgba(0,0,0,.18);
-    }
-    .sub-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-    .sub-toast.success { background: var(--green-700); }
-    .sub-toast.error   { background: #dc2626; }
-
-    /* Notes */
-    .modal-notes {
-      font-size: .875rem; color: var(--gray-600); line-height: 1.7;
-      background: #fffbeb; border-radius: var(--radius-md);
-      padding: 12px 14px; white-space: pre-line;
-    }
-    html.dark .modal-notes { background: #1c1a0a; color: var(--gray-500); }
-
-    /* Responsive — mobile bottom-sheet feel */
-    @media (max-width: 600px) {
-      .diet-header-section { padding: 30px 22px; gap: 22px; }
-      .diet-header-left h1 { font-size: 1.625rem; }
-      .diet-header-left p  { font-size: .875rem; }
-      .diet-stats { width: 100%; gap: 10px; }
-      .stat-card { flex: 1 1 0; min-width: 0; padding: 16px 16px 14px; }
-      .stat-value { font-size: 1.625rem; }
-      .stat-icon  { width: 28px; height: 28px; margin-bottom: 10px; }
-      .meals-grid { grid-template-columns: 1fr; }
-
-      .modal-overlay {
-        align-items: flex-end;
-        padding: 0;
-      }
-      .modal-box {
-        border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-        max-height: 92vh;
-        /* bottom-sheet: desliza de baixo para cima */
-        transform: translateY(100%);
-        max-width: 100%;
-        /* safe-area para iPhones com home indicator */
-        padding-bottom: env(safe-area-inset-bottom, 0px);
-      }
-      .modal-overlay.open .modal-box {
-        transform: translateY(0);
-      }
-    }
-
-    /* ── Scroll lock seguro (não quebra position:fixed) ── */
-    html.modal-open,
-    html.modal-open body {
-      overflow: hidden;
-      overscroll-behavior: none;
-    }
-
-    /* ════════════════════════════════
-       MODAL DE TRANSPARÊNCIA (IA)
-    ════════════════════════════════ */
-    .explain-section {
-      padding: 18px 24px;
-      border-bottom: 1px solid var(--gray-50);
-    }
-    .explain-section:last-child { border-bottom: none; }
-
-    .explain-section-header {
-      display: flex; align-items: center; gap: 12px; margin-bottom: 10px;
-    }
-    .explain-icon {
-      width: 36px; height: 36px; border-radius: var(--radius-md);
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0; font-size: 1.125rem;
-    }
-    .explain-icon.calories  { background: #fef9c3; }
-    .explain-icon.macros    { background: #dcfce7; }
-    .explain-icon.foods     { background: #dbeafe; }
-    .explain-icon.structure { background: #f3e8ff; }
-    .explain-icon.goal      { background: #fce7f3; }
-
-    .explain-section-title {
-      font-family: 'Outfit', sans-serif; font-size: .9375rem;
-      font-weight: 700; color: var(--gray-800);
-    }
-    .explain-text {
-      font-size: .875rem; color: var(--gray-600);
-      line-height: 1.75; margin: 0 0 10px;
-    }
-    .explain-text:last-child { margin-bottom: 0; }
-
-    /* Destaque para expressões matemáticas/numéricas inline */
-    .explain-section .explain-text strong,
-    .explain-section .explain-text b {
-      color: var(--gray-800); font-weight: 600;
-    }
-
-    /* Skeleton loader para quando explanation é null (dieta antiga) */
-    .explain-unavailable {
-      font-size: .875rem; color: var(--gray-400);
-      font-style: italic; padding: 24px;
-      text-align: center; line-height: 1.65;
-    }
-
-    /* Modal de transparência é mais largo (mais conteúdo) */
-    #modal-explain .modal-box {
-      max-width: 680px;
-      max-height: 90vh;
-    }
-
-    /* Botão de transparência */
-    .btn-explain {
-      background: var(--white);
-      color: var(--green-700);
-      border: 1.5px solid var(--green-200);
-      box-shadow: var(--shadow-sm);
-    }
-    .btn-explain:hover {
-      background: var(--green-50);
-      border-color: var(--green-400);
-    }
-
-    /* ── Regeneração de Refeição ── */
-    .regen-desc {
-      font-size: .875rem; color: var(--gray-500);
-      line-height: 1.55; margin-bottom: 12px;
-    }
-
-    /* Chips de motivo rápido */
-    .regen-chips {
-      display: flex; flex-wrap: wrap; gap: 7px;
-      margin-bottom: 10px;
-    }
-    .regen-chip {
-      padding: 5px 12px; border-radius: 20px;
-      border: 1.5px solid var(--gray-200);
-      background: var(--white); color: var(--gray-600);
-      font-size: .8rem; cursor: pointer; line-height: 1.4;
-      transition: background .15s, border-color .15s, color .15s, transform .1s;
-      white-space: nowrap;
-    }
-    .regen-chip:hover {
-      border-color: var(--green-300); background: var(--green-50);
-      color: var(--green-700);
-    }
-    .regen-chip.selected {
-      background: var(--green-50); border-color: var(--green-500);
-      color: var(--green-700); font-weight: 600;
-    }
-    .regen-chip:active { transform: scale(.96); }
-    .regen-custom-toggle {
-      background: none; border: none; padding: 0;
-      font-size: .8rem; color: var(--gray-400); cursor: pointer;
-      text-decoration: underline; text-underline-offset: 2px;
-      transition: color .15s;
-    }
-    .regen-custom-toggle:hover { color: var(--gray-600); }
-    .regen-custom-wrap { margin-top: 8px; }
-
-    .regen-textarea {
-      width: 100%; box-sizing: border-box;
-      padding: 8px 12px;
-      border: 1px solid var(--gray-200); border-radius: 8px;
-      font-size: .875rem; color: var(--gray-700);
-      resize: none; outline: none;
-      transition: border-color .15s;
-      background: var(--white);
-      font-family: inherit; line-height: 1.5;
-    }
-    .regen-textarea:focus { border-color: var(--green-500); }
-    .regen-actions {
-      display: flex; gap: 10px; align-items: center;
-      margin-top: 10px; flex-wrap: wrap;
-    }
-    .btn-regen-primary {
-      padding: 8px 18px; border-radius: 8px; border: none;
-      background: var(--gradient-primary); color: white;
-      font-size: .8125rem; font-weight: 600; cursor: pointer;
-      display: inline-flex; align-items: center; gap: 6px;
-      transition: opacity .15s;
-    }
-    .btn-regen-primary:hover:not(:disabled) { opacity: .88; }
-    .btn-regen-primary:disabled {
-      background: var(--gray-200); color: var(--gray-400); cursor: not-allowed;
-    }
-    .btn-regen-undo {
-      padding: 8px 16px; border-radius: 8px;
-      background: none; border: 1px solid var(--gray-200);
-      color: var(--gray-600); font-size: .8125rem; cursor: pointer;
-      display: inline-flex; align-items: center; gap: 6px;
-      transition: background .15s, border-color .15s;
-    }
-    .btn-regen-undo:hover { background: var(--gray-100); border-color: var(--gray-300); }
-    .regen-remaining {
-      font-size: .75rem; color: var(--gray-400);
-      margin-top: 8px;
-    }
-    .regen-loading-wrap {
-      display: flex; align-items: center; gap: 12px; padding: 4px 0;
-    }
-    .regen-spinner-sm {
-      width: 18px; height: 18px;
-      border: 2px solid var(--green-200);
-      border-top-color: var(--green-500);
-      border-radius: 50%;
-      animation: spin .8s linear infinite;
-      flex-shrink: 0;
-    }
-    .regen-loading-text { font-size: .875rem; color: var(--gray-500); }
-
-    /* Diff antes / depois */
-    @keyframes diffIn {
-      from { opacity: 0; transform: translateY(6px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    .regen-diff-wrap { animation: diffIn .3s ease; }
-    .regen-diff-cols {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
-      margin-bottom: 14px;
-    }
-    .regen-diff-col {
-      border-radius: 10px; padding: 10px 12px;
-    }
-    .regen-diff-col.before {
-      background: var(--gray-50); border: 1.5px solid var(--gray-200);
-    }
-    .regen-diff-col.after {
-      background: var(--green-50); border: 1.5px solid var(--green-300);
-    }
-    .regen-diff-col-title {
-      font-size: .6875rem; font-weight: 700;
-      text-transform: uppercase; letter-spacing: .07em;
-      margin-bottom: 8px;
-    }
-    .regen-diff-col.before .regen-diff-col-title { color: var(--gray-400); }
-    .regen-diff-col.after  .regen-diff-col-title { color: var(--green-600); }
-    .regen-diff-food {
-      font-size: .8125rem; color: var(--gray-600);
-      padding: 2px 0;
-      display: flex; align-items: baseline; gap: 6px;
-    }
-    .regen-diff-col.after .regen-diff-food { color: var(--gray-700); }
-    .regen-diff-dot {
-      width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0;
-      position: relative; top: -1px;
-    }
-    .regen-diff-col.before .regen-diff-dot { background: var(--gray-300); }
-    .regen-diff-col.after  .regen-diff-dot { background: var(--green-500); }
-    .regen-diff-qty { font-size: .73rem; color: var(--gray-400); }
-    .regen-diff-more { color: var(--gray-400); font-size: .78rem; }
-    .regen-diff-kcal {
-      font-size: .75rem; font-weight: 600;
-      margin-top: 8px; padding-top: 8px; border-top: 1px solid;
-    }
-    .regen-diff-col.before .regen-diff-kcal { color: var(--gray-400); border-color: var(--gray-200); }
-    .regen-diff-col.after  .regen-diff-kcal { color: var(--green-600); border-color: var(--green-200); }
-    .regen-diff-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-    .regen-diff-remaining {
-      font-size: .75rem; color: var(--gray-400); margin-top: 10px;
-    }
-
-    /* Flash no card após regeneração */
-    @keyframes regenFlash {
-      0%   { box-shadow: 0 0 0 0   rgba(34,197,94,.55); border-color: var(--mcb); }
-      45%  { box-shadow: 0 0 0 8px rgba(34,197,94,.15); border-color: #4ade80; }
-      100% { box-shadow: 0 0 0 0   rgba(34,197,94,0);   border-color: var(--mcb); }
-    }
-    .meal-card.regen-flash { animation: regenFlash 1s ease-out forwards; }
-  </style>
+  <link rel="stylesheet" href="/static/src/styles/dieta.css" />
 </head>
 <body>
 
@@ -1586,6 +96,21 @@
               <span id="modal-kcal-text">— kcal</span>
             </span>
           </div>
+          <!-- Macros inline no header -->
+          <div class="modal-header-macros" id="modal-header-macros" style="display:none;">
+            <div class="mhm-pill p">
+              <span class="mhm-val" id="mhm-protein">—</span><small>g</small>
+              <span class="mhm-lbl">Prot</span>
+            </div>
+            <div class="mhm-pill c">
+              <span class="mhm-val" id="mhm-carbs">—</span><small>g</small>
+              <span class="mhm-lbl">Carb</span>
+            </div>
+            <div class="mhm-pill f">
+              <span class="mhm-val" id="mhm-fat">—</span><small>g</small>
+              <span class="mhm-lbl">Gord</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1598,61 +123,56 @@
           <div class="foods-list" id="foods-tbody"></div>
         </div>
 
-        <!-- Macros da refeição -->
-        <div class="modal-section" id="modal-macros-section" style="display:none;">
-          <p class="modal-section-label">Macros estimados</p>
-          <div class="meal-macros-grid" id="modal-macros-grid"></div>
-        </div>
-
         <!-- Substituições -->
         <div class="modal-section">
           <p class="modal-section-label">Substituições Sugeridas</p>
           <div class="subs-list" id="modal-subs"></div>
         </div>
 
-        <!-- Regenerar refeição -->
-        <div class="modal-section">
-          <p class="modal-section-label">Regenerar esta refeição</p>
 
-          <!-- Estado idle -->
-          <div id="regen-idle-state">
-            <p class="regen-desc">Não gostou desta sugestão? Gere uma opção diferente sem alterar as outras refeições.</p>
+        <!-- Dicas da refeição -->
+        <div class="modal-section" id="modal-notes-section" style="display:none;">
+          <p class="modal-section-label">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z"/><path d="M12 8v4m0 4h.01"/></svg>
+            Dicas desta refeição
+          </p>
+          <p class="modal-notes" id="modal-notes-text"></p>
+        </div>
 
-            <!-- Chips de motivo rápido -->
-            <div class="regen-chips" id="regen-chips">
-              <button class="regen-chip" type="button" data-reason="Não tenho os ingredientes">Não tenho os ingredientes</button>
-              <button class="regen-chip" type="button" data-reason="Não gosto do sabor">Não gosto do sabor</button>
-              <button class="regen-chip" type="button" data-reason="Quero algo mais prático">Quero algo mais prático</button>
-              <button class="regen-chip" type="button" data-reason="Muito caro">Muito caro</button>
-              <button class="regen-chip" type="button" data-reason="Quero mais proteína">Quero mais proteína</button>
-            </div>
-            <button class="regen-custom-toggle" id="regen-custom-toggle" type="button">✏️ Digitar outro motivo</button>
-            <div class="regen-custom-wrap" id="regen-custom-wrap" style="display:none;">
-              <textarea class="regen-textarea" id="regen-reason" rows="2" maxlength="300"
-                        placeholder="Descreva o motivo (opcional)"></textarea>
-            </div>
+      </div><!-- /modal-body -->
 
-            <div class="regen-actions">
-              <button id="btn-regen-meal" class="btn-regen-primary">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.08-5.52"/></svg>
-                Gerar nova sugestão
-              </button>
-              <button id="btn-undo-meal" class="btn-regen-undo" style="display:none;">
-                ↩ Desfazer
-              </button>
+      <!-- ═══ ASSISTENTE — dock fixo no rodapé ═══ -->
+      <div class="chat-dock">
+
+        <!-- Cabeçalho colapsável -->
+        <button class="chat-dock-toggle" id="chat-dock-toggle" aria-expanded="false">
+          <div class="chat-dock-toggle-left">
+            <div class="chat-dock-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             </div>
-            <p class="regen-remaining" id="regen-remaining-text"></p>
+            <div>
+              <p class="chat-dock-title">Assistente de Refeição</p>
+              <p class="chat-dock-hint" id="chat-dock-hint">Não gostou? Posso trocar esta refeição</p>
+            </div>
           </div>
+          <svg class="chat-dock-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+        </button>
 
-          <!-- Estado loading -->
+        <!-- Painel expansível -->
+        <div class="chat-dock-panel" id="chat-dock-panel">
+
+          <!-- Mensagens -->
+          <div class="chat-messages" id="chat-messages"></div>
+
+          <!-- Typing -->
           <div id="regen-loading-state" style="display:none;">
-            <div class="regen-loading-wrap">
-              <div class="regen-spinner-sm"></div>
-              <p class="regen-loading-text" id="regen-loading-text">Analisando seus macros...</p>
+            <div class="chat-typing">
+              <div class="chat-typing-bubble"><span></span><span></span><span></span></div>
+              <p class="chat-typing-text" id="regen-loading-text">Analisando seus macros...</p>
             </div>
           </div>
 
-          <!-- Estado diff antes/depois -->
+          <!-- Diff antes/depois -->
           <div id="regen-diff-state" style="display:none;">
             <div class="regen-diff-wrap">
               <div class="regen-diff-cols">
@@ -1676,18 +196,31 @@
             </div>
           </div>
 
-        </div>
+          <!-- Input -->
+          <div class="chat-input-area" id="regen-idle-state">
+            <div class="chat-chips" id="regen-chips">
+              <button class="chat-chip" type="button" data-reason="Não tenho os ingredientes">🛒 Não tenho os ingredientes</button>
+              <button class="chat-chip" type="button" data-reason="Não gosto do sabor">😕 Não gosto do sabor</button>
+              <button class="chat-chip" type="button" data-reason="Quero algo mais prático">⚡ Mais prático</button>
+              <button class="chat-chip" type="button" data-reason="Muito caro">💰 Muito caro</button>
+              <button class="chat-chip" type="button" data-reason="Quero mais proteína">💪 Mais proteína</button>
+            </div>
+            <div class="chat-input-row">
+              <textarea class="chat-input" id="regen-reason" rows="1" maxlength="300"
+                        placeholder="Ou escreva seu motivo..."></textarea>
+              <button id="btn-regen-meal" class="chat-send-btn" title="Gerar nova sugestão">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.08-5.52"/></svg>
+              </button>
+              <button id="btn-undo-meal" class="chat-undo-btn" style="display:none;" title="Desfazer">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>
+              </button>
+            </div>
+            <p class="regen-remaining" id="regen-remaining-text"></p>
+          </div>
 
-        <!-- Notas -->
-        <div class="modal-section" id="modal-notes-section" style="display:none;">
-          <p class="modal-section-label">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            Dicas do Plano
-          </p>
-          <p class="modal-notes" id="modal-notes-text"></p>
-        </div>
+        </div><!-- /chat-dock-panel -->
+      </div><!-- /chat-dock -->
 
-      </div><!-- /modal-body -->
     </div><!-- /modal-box -->
   </div><!-- /modal-overlay (refeição) -->
 
@@ -1909,6 +442,30 @@
     })();
 
     const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://127.0.0.1:8000/api/v1' : '/api/v1';
+
+    // Wrapper de fetch com refresh automático: se a resposta for 401, tenta renovar o
+    // access token via refresh cookie antes de redirecionar para /auth/.
+    let _refreshing = null;
+    async function apiFetch(url, opts = {}) {
+      opts = { credentials: 'include', ...opts };
+      let res = await fetch(url, opts);
+      if (res.status !== 401) return res;
+
+      // Evita múltiplas chamadas simultâneas de refresh
+      if (!_refreshing) {
+        _refreshing = fetch(`${API_BASE}/auth/token/refresh`, { method: 'POST', credentials: 'include' })
+          .finally(() => { _refreshing = null; });
+      }
+      const refreshRes = await _refreshing;
+      if (!refreshRes.ok) {
+        localStorage.removeItem('mynutri_user');
+        window.location.href = '/auth/';
+        return res;
+      }
+      // Repete a requisição original com o novo access token (já setado no cookie)
+      return fetch(url, opts);
+    }
+
     // Auth guard: loadUser() e fetchExistingDiet() redirecionam para /auth/ se a API retornar 401.
     // Não fazemos redirect síncrono aqui para suportar o fluxo de redirect do Google OAuth,
     // onde os cookies são setados pelo backend mas o localStorage ainda está vazio.
@@ -1959,7 +516,7 @@
       const cached = JSON.parse(localStorage.getItem('mynutri_user') || 'null');
       if (cached?.nome) { applyUserUI(cached); return; }
       try {
-        const res = await fetch(`${API_BASE}/user/profile`, { credentials: 'include' });
+        const res = await apiFetch(`${API_BASE}/user/profile`);
         if (res.status === 401) {
           localStorage.removeItem('mynutri_user');
           window.location.href = '/auth/';
@@ -2040,9 +597,10 @@
         const foodQty   = foodMatch ? `<span class="sub-from-qty">${escapeHtml(foodMatch[2])}</span>` : '';
         return `
           <div class="sub-row" data-sub-index="${idx}" style="animation-delay:${i * 0.07}s">
-            <div class="sub-header">
-              <div class="sub-food-wrap">
-                <span class="sub-from">${foodLabel}</span>${foodQty}
+            <div class="sub-from-row">
+              <div class="sub-from-wrap">
+                <span class="sub-from">${foodLabel}</span>
+                ${foodQty}
               </div>
               <button class="sub-edit-btn" data-sub-index="${idx}" title="Editar" aria-label="Editar substituição de ${escapeHtml(s.food)}">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2051,7 +609,12 @@
                 </svg>
               </button>
             </div>
-            <div class="sub-divider"></div>
+            <div class="sub-arrow-row">
+              <div class="sub-arrow-line">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                <span class="sub-by-label">por qualquer um de</span>
+              </div>
+            </div>
             <div class="sub-tags">${alts}</div>
           </div>`;
       }).join('');
@@ -2134,10 +697,9 @@
       updatedSubs[idx]  = { food, alternatives: alts };
 
       try {
-        const res = await fetch(`${API_BASE}/diet/${dietData.id}/substitutions`, {
+        const res = await apiFetch(`${API_BASE}/diet/${dietData.id}/substitutions`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
           body: JSON.stringify({ substitutions: updatedSubs }),
         });
 
@@ -2161,6 +723,52 @@
     const modalBox  = document.getElementById('modalBox');
     const closeBtn  = document.getElementById('modalClose');
 
+    // ── Chat helpers ──
+    function _addChatMessage(text, role = 'bot', isTyping = false) {
+      const container = document.getElementById('chat-messages');
+      const msg = document.createElement('div');
+      msg.className = `chat-msg chat-msg--${role}${isTyping ? ' chat-msg--typing' : ''}`;
+      msg.innerHTML = `<div class="chat-bubble">${escapeHtml(text)}</div>`;
+      container.appendChild(msg);
+      container.scrollTop = container.scrollHeight;
+      return msg;
+    }
+
+    function _clearChatMessages() {
+      const container = document.getElementById('chat-messages');
+      if (container) container.innerHTML = '';
+    }
+
+    // ── Chat Dock helpers (declarados cedo para uso em _initChat) ──
+    function openChatDock() {
+      const toggle = document.getElementById('chat-dock-toggle');
+      const panel  = document.getElementById('chat-dock-panel');
+      if (!toggle || !panel) return;
+      toggle.setAttribute('aria-expanded', 'true');
+      panel.classList.add('open');
+      requestAnimationFrame(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+    }
+
+    function closeChatDock() {
+      const toggle = document.getElementById('chat-dock-toggle');
+      const panel  = document.getElementById('chat-dock-panel');
+      if (!toggle || !panel) return;
+      toggle.setAttribute('aria-expanded', 'false');
+      panel.classList.remove('open');
+    }
+
+    function _setDockHint(text) {
+      const el = document.getElementById('chat-dock-hint');
+      if (el) el.textContent = text;
+    }
+
+    function _initChat() {
+      _clearChatMessages();
+      _addChatMessage('Olá! Não gostou desta refeição? Me diga o motivo e gero uma nova opção pra você.', 'bot');
+      _setDockHint('Não gostou? Posso trocar esta refeição');
+      closeChatDock();
+    }
+
     function _resetRegenSection(keepUndo) {
       document.getElementById('regen-idle-state').style.display    = 'block';
       document.getElementById('regen-loading-state').style.display = 'none';
@@ -2170,13 +778,12 @@
         document.getElementById('regen-reason').value               = '';
         document.getElementById('btn-undo-meal').style.display      = 'none';
         document.getElementById('regen-remaining-text').textContent = '';
-        document.getElementById('regen-custom-wrap').style.display  = 'none';
-        document.getElementById('regen-custom-toggle').textContent  = '✏️ Digitar outro motivo';
-        document.querySelectorAll('.regen-chip').forEach(c => c.classList.remove('selected'));
+        document.querySelectorAll('.chat-chip').forEach(c => c.classList.remove('selected'));
         _regenHasUndo       = false;
         _pendingNewMealData = null;
         _pendingMealIndex   = null;
         _selectedChip       = null;
+        _initChat();
       }
     }
 
@@ -2194,6 +801,11 @@
         i = (i + 1) % msgs.length;
         if (el) el.textContent = msgs[i];
       }, 1600);
+    }
+
+    function _addUserMessageToChat(reason) {
+      const text = reason || 'Gerar nova sugestão';
+      _addChatMessage(text, 'user');
     }
 
     function _showRegenDiff(beforeFoods, beforeKcal, afterFoods, afterKcal, remaining) {
@@ -2229,8 +841,8 @@
         if (_pendingNewMealData && _pendingMealIndex !== null) {
           const mealIdToUndo = dietData.refeicoes[_pendingMealIndex]?.id;
           if (mealIdToUndo) {
-            fetch(`${API_BASE}/diet/${dietData.id}/meal/${mealIdToUndo}/undo`,
-              { method: 'POST', credentials: 'include' }).catch(() => {});
+            apiFetch(`${API_BASE}/diet/${dietData.id}/meal/${mealIdToUndo}/undo`,
+              { method: 'POST' }).catch(() => {});
           }
           _pendingNewMealData = null;
           _pendingMealIndex   = null;
@@ -2243,7 +855,6 @@
       const refeicao  = dietData.refeicoes[mealIndex];
       const rawMeal   = (dietData.meals_raw || [])[mealIndex] || {};
       const allSubs   = dietData.substitutions || [];
-      const notes     = dietData.notes || '';
       const emoji     = MEAL_EMOJIS[mealIndex % MEAL_EMOJIS.length];
 
       // ── Aplicar paleta de cor no modal ──
@@ -2331,11 +942,7 @@
         }
       }
 
-      // ── Macros da refeição ──
-      const macrosSection = document.getElementById('modal-macros-section');
-      const macrosGrid    = document.getElementById('modal-macros-grid');
-
-      // Try to sum per-food macros
+      // ── Macros no header ──
       let protein = 0, carbs = 0, fat = 0, hasMacros = false;
       rawFoods.forEach(f => {
         if (f.protein_g != null || f.carbs_g != null || f.fat_g != null) {
@@ -2346,7 +953,6 @@
         }
       });
 
-      // Fallback: estimate from plan-level macros (proportional by calorie share)
       if (!hasMacros && dietData.macros && dietData.calorias_totais) {
         const share = (refeicao.calorias_estimadas || 0) / dietData.calorias_totais;
         protein = Math.round((dietData.macros.protein_g || 0) * share);
@@ -2355,32 +961,28 @@
         hasMacros = true;
       }
 
+      const headerMacros = document.getElementById('modal-header-macros');
       if (hasMacros) {
-        macrosSection.style.display = 'block';
-        macrosGrid.innerHTML = [
-          { label: 'Proteína',     value: Math.round(protein), cls: 'p' },
-          { label: 'Carboidratos', value: Math.round(carbs),   cls: 'c' },
-          { label: 'Gordura',      value: Math.round(fat),     cls: 'f' },
-        ].map(m => `
-          <div class="meal-macro-card ${m.cls}">
-            <span class="meal-macro-value">${m.value}<small>g</small></span>
-            <span class="meal-macro-label">${m.label}</span>
-            <div class="meal-macro-bar ${m.cls}"></div>
-          </div>
-        `).join('');
+        document.getElementById('mhm-protein').textContent = Math.round(protein);
+        document.getElementById('mhm-carbs').textContent   = Math.round(carbs);
+        document.getElementById('mhm-fat').textContent     = Math.round(fat);
+        headerMacros.style.display = 'flex';
       } else {
-        macrosSection.style.display = 'none';
+        headerMacros.style.display = 'none';
       }
 
       // ── Substituições ──
       _currentModalRawFoods = rawFoods;
       renderSubstitutions(document.getElementById('modal-subs'));
 
-      // ── Notes ──
+      // ── Dicas da refeição (meal_notes individual > fallback notas globais) ──
+      const mealNotes   = rawMeal.meal_notes || '';
+      const globalNotes = dietData.notes || '';
+      const notesText   = mealNotes || globalNotes;
       const notesSection = document.getElementById('modal-notes-section');
-      if (notes) {
+      if (notesText) {
         notesSection.style.display = 'block';
-        document.getElementById('modal-notes-text').textContent = notes;
+        document.getElementById('modal-notes-text').textContent = notesText;
       } else {
         notesSection.style.display = 'none';
       }
@@ -2435,17 +1037,21 @@
       const beforeFoods = (beforeRaw.foods || []).slice(0, 6);
       const beforeKcal  = dietData.refeicoes[idx]?.calorias_estimadas ?? '—';
 
+      // Adiciona mensagem do usuário e abre o dock
+      openChatDock();
+      _addUserMessageToChat(reason || 'Gerar nova sugestão');
+      _setDockHint('Gerando nova sugestão...');
+
       document.getElementById('regen-idle-state').style.display    = 'none';
       document.getElementById('regen-loading-state').style.display = 'block';
       _startLoadingMessages();
 
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `${API_BASE}/diet/${dietData.id}/meal/${_currentModalMealId}/regenerate`,
           {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
             body: JSON.stringify({ reason }),
           },
         );
@@ -2460,7 +1066,9 @@
         }
 
         if (!res.ok) {
-          _resetRegenSection(false);
+          document.getElementById('regen-loading-state').style.display = 'none';
+          document.getElementById('regen-idle-state').style.display    = 'block';
+          _addChatMessage(data.error || 'Não consegui gerar uma nova sugestão. Tente novamente.', 'bot');
           showToast(data.error || 'Erro ao regenerar. Tente novamente.', 'error');
           return;
         }
@@ -2475,12 +1083,18 @@
         _pendingMealIndex   = idx;
         _regenHasUndo       = true;
 
+        // Mensagem de resposta do bot antes de mostrar o diff
+        _addChatMessage(`Pronto! Criei uma nova opção com ${afterKcal} kcal. Veja abaixo e confirme se quiser manter.`, 'bot');
+        _setDockHint('Nova sugestão pronta — confirme ou desfaça');
+
         // Mostra diff sem alterar nada na UI
         _showRegenDiff(beforeFoods, beforeKcal, afterFoods, afterKcal, remaining);
 
       } catch {
         clearInterval(_loadingMsgTimer);
-        _resetRegenSection(false);
+        document.getElementById('regen-loading-state').style.display = 'none';
+        document.getElementById('regen-idle-state').style.display    = 'block';
+        _addChatMessage('Erro de conexão. Verifique sua internet e tente novamente.', 'bot');
         showToast('Erro de conexão. Tente novamente.', 'error');
       }
     }
@@ -2610,7 +1224,7 @@
 
     // ── Chips de motivo ──
     document.getElementById('regen-chips').addEventListener('click', e => {
-      const chip = e.target.closest('.regen-chip');
+      const chip = e.target.closest('.chat-chip');
       if (!chip) return;
 
       if (_selectedChip === chip) {
@@ -2622,22 +1236,26 @@
         chip.classList.add('selected');
         _selectedChip = chip;
         document.getElementById('regen-reason').value = chip.dataset.reason;
-        document.getElementById('regen-custom-wrap').style.display = 'none';
-        document.getElementById('regen-custom-toggle').textContent = '✏️ Digitar outro motivo';
+        document.getElementById('regen-reason').focus();
       }
     });
 
-    // ── Toggle de motivo livre ──
-    document.getElementById('regen-custom-toggle').addEventListener('click', () => {
-      const wrap  = document.getElementById('regen-custom-wrap');
-      const shown = wrap.style.display !== 'none';
-      wrap.style.display = shown ? 'none' : 'block';
-      document.getElementById('regen-custom-toggle').textContent =
-        shown ? '✏️ Digitar outro motivo' : '✕ Cancelar';
-      if (!shown) {
-        if (_selectedChip) { _selectedChip.classList.remove('selected'); _selectedChip = null; }
-        document.getElementById('regen-reason').value = '';
-        document.getElementById('regen-reason').focus();
+    // ── Auto-resize do textarea ──
+    document.getElementById('regen-reason').addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = Math.min(this.scrollHeight, 96) + 'px';
+      // Deseleciona chip se o usuário digitou algo diferente
+      if (_selectedChip && this.value !== _selectedChip.dataset.reason) {
+        _selectedChip.classList.remove('selected');
+        _selectedChip = null;
+      }
+    });
+
+    // ── Enter para enviar (Shift+Enter nova linha) ──
+    document.getElementById('regen-reason').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        document.getElementById('btn-regen-meal').click();
       }
     });
 
@@ -3050,7 +1668,7 @@
           polls++;
 
           try {
-            const res = await fetch(`${API_BASE}/diet/status/${jobId}`, { credentials: 'include' });
+            const res = await apiFetch(`${API_BASE}/diet/status/${jobId}`);
 
             if (res.status === 401) {
               clearInterval(interval);
@@ -3072,8 +1690,7 @@
             if (data.status === 'done' && data.diet_plan_id) {
               clearInterval(interval);
               stopLoadingTips();
-              // Busca o plano completo pelo ID retornado
-              const planRes = await fetch(`${API_BASE}/diet/${data.diet_plan_id}`, { credentials: 'include' });
+              const planRes = await apiFetch(`${API_BASE}/diet/${data.diet_plan_id}`);
               if (!planRes.ok) { reject(new Error('Erro ao carregar dieta gerada.')); return; }
               resolve(await planRes.json());
 
@@ -3109,7 +1726,7 @@
         if (pending) {
           document.getElementById('loading-msg').textContent = 'Enviando questionário...';
           try {
-            const ar = await fetch(`${API_BASE}/anamnese`, { method:'POST', headers: jsonHeaders, credentials:'include', body:pending });
+            const ar = await apiFetch(`${API_BASE}/anamnese`, { method:'POST', headers: jsonHeaders, body:pending });
             if (!ar.ok) {
               const e = await ar.json().catch(() => ({}));
               showError(Object.values(e).flat().join(' ') || 'Erro ao salvar questionário.');
@@ -3126,7 +1743,7 @@
 
         let jobId;
         try {
-          const dr = await fetch(`${API_BASE}/diet/generate`, { method:'POST', headers: jsonHeaders, credentials:'include', body:'{}' });
+          const dr = await apiFetch(`${API_BASE}/diet/generate`, { method:'POST', headers: jsonHeaders, body:'{}' });
           if (!dr.ok) {
             stopLoadingTips();
             const e = await dr.json().catch(() => ({}));
@@ -3139,7 +1756,7 @@
           // Modo síncrono (dev sem Redis): job já está done, busca direto
           if (jobData.status === 'done' && jobData.diet_plan_id) {
             stopLoadingTips();
-            const planRes = await fetch(`${API_BASE}/diet/${jobData.diet_plan_id}`, { credentials: 'include' });
+            const planRes = await apiFetch(`${API_BASE}/diet/${jobData.diet_plan_id}`);
             renderDiet(await planRes.json());
             history.replaceState(null, '', 'dieta.html');
             return;
@@ -3169,7 +1786,7 @@
 
     async function fetchExistingDiet() {
       try {
-        const res = await fetch(`${API_BASE}/diet`, { credentials: 'include' });
+        const res = await apiFetch(`${API_BASE}/diet`);
         if (res.status === 401) { localStorage.removeItem('mynutri_user'); window.location.href = '/auth/'; return; }
         if (res.status === 404) { showError('Você ainda não possui um plano alimentar.'); return; }
         if (!res.ok)            { showError('Não foi possível carregar sua dieta.'); return; }
@@ -3192,7 +1809,7 @@
       label.textContent = 'Gerando PDF...';
 
       try {
-        const res = await fetch(`${API_BASE}/diet/${dietId}/pdf`, { credentials: 'include' });
+        const res = await apiFetch(`${API_BASE}/diet/${dietId}/pdf`);
 
         if (!res.ok) {
           alert('Não foi possível gerar o PDF. Tente novamente.');
@@ -3214,6 +1831,14 @@
         btn.disabled      = false;
         label.textContent = 'Baixar PDF';
       }
+    });
+
+    // ════════════════════════════════
+    //  CHAT DOCK — toggle listener
+    // ════════════════════════════════
+    document.getElementById('chat-dock-toggle').addEventListener('click', () => {
+      const panel = document.getElementById('chat-dock-panel');
+      panel.classList.contains('open') ? closeChatDock() : openChatDock();
     });
 
     // ── Page transitions ──
