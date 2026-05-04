@@ -51,7 +51,12 @@
       "PowerShell(@\\(\"/\", \"/auth/\", \"/dieta/\", \"/perfil/\"\\) | ForEach-Object { try { $r = Invoke-WebRequest -Uri \"http://127.0.0.1:8000$_\" -UseBasicParsing -MaximumRedirection 0; \"$_ -> $\\($r.StatusCode\\)\" } catch { \"$_ -> $\\($_.Exception.Response.StatusCode\\)\" } })",
       "PowerShell($r = Invoke-WebRequest -Uri \"http://127.0.0.1:8000/static/src/js/pages/auth.js\" -UseBasicParsing; \\($r.Content -split \"`n\"\\) | Select-String -Pattern \"location|redirect\" | ForEach-Object { $_.Line })",
       "PowerShell($r = Invoke-WebRequest -Uri \"http://127.0.0.1:8000/\" -UseBasicParsing; \"Cache-Control: $\\($r.Headers.'Cache-Control'\\)\"; \"ETag: $\\($r.Headers.ETag\\)\"; \"Last-Modified: $\\($r.Headers.'Last-Modified'\\)\")",
-      "PowerShell($r = Invoke-WebRequest -Uri \"http://127.0.0.1:8000/static/src/js/utils/http.js\" -UseBasicParsing; \"Cache-Control: $\\($r.Headers.'Cache-Control'\\)\"; \"Content-Length: $\\($r.Headers.'Content-Length'\\)\")"
+      "PowerShell($r = Invoke-WebRequest -Uri \"http://127.0.0.1:8000/static/src/js/utils/http.js\" -UseBasicParsing; \"Cache-Control: $\\($r.Headers.'Cache-Control'\\)\"; \"Content-Length: $\\($r.Headers.'Content-Length'\\)\")",
+      "Bash(netstat -ano)",
+      "Bash(findstr :8000)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://127.0.0.1:8000/api/v1/diet/generate -X POST -H \"Content-Type: application/json\" -d '{}')",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://127.0.0.1:8000/dieta/)",
+      "Bash(curl -s http://127.0.0.1:8000/static/src/js/pages/dieta.js)"
     ],
     "additionalDirectories": [
       "\\tmp",
