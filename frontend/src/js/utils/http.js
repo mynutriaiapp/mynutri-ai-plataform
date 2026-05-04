@@ -13,7 +13,10 @@ const API_BASE =
 let _refreshing = null;
 
 async function apiFetch(url, opts = {}) {
+  const redirectOn401 = opts.redirectOn401 !== false;
   opts = { credentials: 'include', ...opts };
+  delete opts.redirectOn401;
+
   let res = await fetch(url, opts);
   if (res.status !== 401) return res;
 
@@ -27,7 +30,7 @@ async function apiFetch(url, opts = {}) {
   const refreshRes = await _refreshing;
   if (!refreshRes.ok) {
     localStorage.removeItem('mynutri_user');
-    window.location.href = '/auth/';
+    if (redirectOn401) window.location.href = '/auth/';
     return res;
   }
 
