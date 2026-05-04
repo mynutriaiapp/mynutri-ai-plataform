@@ -16,7 +16,7 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from nutrition.models import Anamnese, DietPlan, Meal
-from nutrition.services import AIService
+from nutrition.services import AIService, TransientAIError
 from nutrition.prompts import (
     SYSTEM_PROMPT_FOODS,
     FOOD_SELECTION_TEMPLATE,
@@ -292,15 +292,15 @@ class TestParseResponseMarkdown:
         assert result['calories'] == 2100
 
     def test_parse_json_invalido_levanta_value_error(self, service):
-        with pytest.raises(ValueError, match='formato inesperado'):
+        with pytest.raises(TransientAIError, match='formato inesperado'):
             service._parse_response(self._wrap('isso não é json {'))
 
     def test_parse_sem_choices_levanta_value_error(self, service):
-        with pytest.raises(ValueError):
+        with pytest.raises(TransientAIError):
             service._parse_response({})
 
     def test_parse_choices_vazio_levanta_value_error(self, service):
-        with pytest.raises(ValueError):
+        with pytest.raises(TransientAIError):
             service._parse_response({'choices': []})
 
 
@@ -565,7 +565,7 @@ class TestPipelineCompleto:
         """Resposta da IA sem meals deve levantar ValueError."""
         mock_call.return_value = _wrap_api_response({'goal_description': 'Teste', 'meals': []})
         service = AIService()
-        with pytest.raises(ValueError, match='refeições válidas'):
+        with pytest.raises(TransientAIError, match='refeições válidas'):
             service.generate_diet(anamnese_obj)
 
     @patch.object(AIService, '_call_api')

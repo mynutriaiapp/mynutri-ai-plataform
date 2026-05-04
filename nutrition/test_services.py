@@ -12,7 +12,7 @@ from django.contrib.auth import get_user_model
 from django.test import override_settings
 
 from nutrition.models import Anamnese, DietJob, DietPlan, Meal
-from nutrition.services import AIService
+from nutrition.services import AIService, TransientAIError
 
 User = get_user_model()
 
@@ -140,16 +140,16 @@ class TestParseResponse:
         assert result['calories'] == 1800
 
     def test_parse_resposta_sem_choices(self, ai_service):
-        with pytest.raises(ValueError):
+        with pytest.raises(TransientAIError):
             ai_service._parse_response({})
 
     def test_parse_resposta_json_invalido(self, ai_service):
         raw = {'choices': [{'message': {'content': 'não é json {'}}]}
-        with pytest.raises(ValueError):
+        with pytest.raises(TransientAIError):
             ai_service._parse_response(raw)
 
     def test_parse_resposta_choices_vazio(self, ai_service):
-        with pytest.raises(ValueError):
+        with pytest.raises(TransientAIError):
             ai_service._parse_response({'choices': []})
 
 
@@ -434,13 +434,13 @@ class TestGenerateDietTask:
     @override_settings(CELERY_TASK_EAGER_PROPAGATES=False)
     @patch('nutrition.services.AIService.generate_diet')
     def test_task_retry_em_erro_transitorio_e_sucesso_no_segundo(self, mock_generate, job, anamnese):
-        """ValueError com frase retryable deve disparar retry; deve completar no segundo attempt.
+        """TransientAIError deve disparar retry; deve completar no segundo attempt.
         CELERY_TASK_EAGER_PROPAGATES=False é necessário para que self.retry() re-execute
         a task em eager mode em vez de propagar a exceção Retry.
         """
         diet_plan = self._make_diet_plan(anamnese.user)
         mock_generate.side_effect = [
-            ValueError('A IA retornou um json inválido. Tente novamente.'),
+            TransientAIError('A IA retornou um formato inesperado. Tente novamente.'),
             diet_plan,
         ]
 
@@ -453,7 +453,7 @@ class TestGenerateDietTask:
 
     @patch('nutrition.services.AIService.generate_diet')
     def test_task_erro_nao_transitorio_falha_imediatamente(self, mock_generate, job):
-        """ValueError sem frase retryable deve ir direto para STATUS_FAILED sem retry."""
+        """Exception genérica (não TransientAIError) deve ir direto para STATUS_FAILED sem retry."""
         mock_generate.side_effect = ValueError('Dados da anamnese inválidos')
 
         from nutrition.tasks import generate_diet_task
@@ -470,7 +470,7 @@ class TestGenerateDietTask:
         CELERY_TASK_EAGER_PROPAGATES=False permite que os retries sejam executados
         em eager mode sem propagar a exceção Retry.
         """
-        mock_generate.side_effect = ValueError('json inválido: unexpected token')
+        mock_generate.side_effect = TransientAIError('A IA retornou um formato inesperado.')
 
         from nutrition.tasks import generate_diet_task
         generate_diet_task.delay(job.pk)
