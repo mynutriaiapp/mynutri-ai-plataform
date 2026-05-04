@@ -255,37 +255,52 @@ def _strip_accents(text: str) -> str:
     return ''.join(c for c in text if unicodedata.category(c) != 'Mn')
 
 
-class AllergenViolation(ValueError):
-    """
-    Levantada quando o plano gerado contém alimento que viola alergias declaradas.
+class DietGenerationError(Exception):
+    """Base para todos os erros de geração de dieta."""
+    pass
 
-    Subclasse de ValueError para integrar ao retry de tasks.py — mensagens
-    contêm "alergia" para casar com _RETRYABLE_PHRASES.
+
+class TransientAIError(DietGenerationError):
+    """
+    Erro transitório — a task Celery deve fazer retry.
+
+    Indica que a falha pode ser resolvida tentando novamente:
+    resposta mal formatada da IA, cobertura nutricional insuficiente,
+    alérgeno detectado (a IA pode escolher outros alimentos), ou
+    desequilíbrio de macros (a IA pode montar um plano melhor).
     """
     pass
 
 
-class NutritionDataGap(ValueError):
+class PermanentAIError(DietGenerationError):
     """
-    Levantada quando muitos alimentos do plano caem no fallback genérico do
-    nutrition_db (150 kcal/100g) — o cálculo calórico fica pouco confiável.
+    Erro permanente — retry não resolve, falha deve ser reportada ao usuário.
 
-    Trigger automático de retry: o LLM pode escolher alimentos diferentes
-    na próxima tentativa, com melhor cobertura no banco TACO.
+    Indica problema de configuração ou dado inválido:
+    chave de API ausente, anamnese corrompida, etc.
     """
     pass
 
 
-class MacroImbalanceError(ValueError):
+class AllergenViolation(TransientAIError):
+    """Plano gerado contém alimento que viola alergias declaradas."""
+    pass
+
+
+class NutritionDataGap(TransientAIError):
     """
-    Levantada quando as proporções de macronutrientes do plano gerado estão
-    fora dos limites fisiologicamente razoáveis.
+    Muitos alimentos do plano caem no fallback genérico do nutrition_db
+    (150 kcal/100g) — o cálculo calórico fica pouco confiável.
+    """
+    pass
 
-    Exemplos: carboidratos > 65% das calorias (excesso de arroz/pão/batata),
-    proteína < 65% da meta calculada, gordura < 15% das calorias.
 
-    Subclasse de ValueError para integrar ao retry de tasks.py — mensagens
-    contêm "desbalanceamento" para casar com _RETRYABLE_PHRASES.
+class MacroImbalanceError(TransientAIError):
+    """
+    Proporções de macronutrientes fora dos limites fisiologicamente razoáveis.
+
+    Exemplos: carboidratos > 65% das calorias, proteína < 65% da meta,
+    gordura < 15% das calorias.
     """
     pass
 
@@ -379,7 +394,7 @@ class AIService:
     ) -> dict:
         """Realiza chamada à API de IA (formato OpenAI Chat Completions)."""
         if not self.api_key or not self.api_url:
-            raise ValueError('AI_API_KEY e AI_API_URL devem estar configurados no .env')
+            raise PermanentAIError('AI_API_KEY e AI_API_URL devem estar configurados no .env')
 
         body: dict = {
             'model':       self.model,
@@ -412,7 +427,7 @@ class AIService:
             content = api_response['choices'][0]['message']['content']
         except (KeyError, IndexError) as e:
             logger.error('Formato inesperado da API: %s | resposta: %s', e, api_response)
-            raise ValueError('A IA retornou um formato inesperado. Tente novamente.')
+            raise TransientAIError('A IA retornou um formato inesperado. Tente novamente.')
 
         stripped = content.strip()
         # Remove markdown code fences caso a API não suporte json_mode
@@ -427,7 +442,7 @@ class AIService:
             return json.loads(stripped)
         except json.JSONDecodeError as e:
             logger.error('JSON inválido da IA: %s | conteúdo: %.200s', e, content)
-            raise ValueError('A IA retornou um formato inesperado. Tente novamente.')
+            raise TransientAIError('A IA retornou um formato inesperado. Tente novamente.')
 
     # ──────────────────────────────────────────────────────────────────────────
     #  ENRIQUECIMENTO NUTRICIONAL (backend — determinístico)
@@ -934,7 +949,7 @@ class AIService:
         diet_data = self._parse_response(raw_response)
 
         if 'meals' not in diet_data or not diet_data['meals']:
-            raise ValueError('A IA não retornou refeições válidas. Tente novamente.')
+            raise TransientAIError('A IA não retornou refeições válidas. Tente novamente.')
 
         # ── Enforcement de alergias (fail-fast antes do trabalho caro) ────────
         self._enforce_allergies(diet_data, anamnese)
@@ -1087,7 +1102,7 @@ class AIService:
         new_meal_data = self._parse_response(raw_response)
 
         if not new_meal_data.get('foods'):
-            raise ValueError('A IA não retornou alimentos válidos para a refeição.')
+            raise TransientAIError('A IA não retornou alimentos válidos para a refeição.')
 
         # Preserva nome e horário caso a IA omita ou altere
         new_meal_data.setdefault('name', current_meal.get('name', f'Refeição {meal_index + 1}'))

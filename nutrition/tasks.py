@@ -16,11 +16,23 @@ from celery import shared_task
 
 logger = logging.getLogger(__name__)
 
-
-_RETRYABLE_PHRASES = (
-    'formato inesperado', 'json inválido', 'json válido',
-    'alergia', 'cobertura nutricional', 'desbalanceamento',
-)
+_USER_MESSAGES = {
+    'AllergenViolation': (
+        'Não foi possível gerar um plano respeitando suas alergias após '
+        'várias tentativas. Verifique se o campo de alergias está claro '
+        '(ex: "amendoim, leite, frutos do mar") ou contate o suporte.'
+    ),
+    'NutritionDataGap': (
+        'Não conseguimos gerar um plano com cálculos calóricos confiáveis '
+        'após várias tentativas. Tente reformular suas preferências '
+        'alimentares com termos mais comuns ou contate o suporte.'
+    ),
+    'MacroImbalanceError': (
+        'Não conseguimos gerar um plano com macronutrientes equilibrados '
+        'após várias tentativas. Tente ajustar suas preferências alimentares '
+        'incluindo mais fontes de proteína (frango, ovos, peixe) ou contate o suporte.'
+    ),
+}
 
 
 @shared_task(bind=True, max_retries=2, name='nutrition.tasks.generate_diet')
@@ -28,12 +40,13 @@ def generate_diet_task(self, job_id: int) -> None:
     """
     Executa a geração de dieta via IA para um DietJob existente.
 
-    Retry automático (até 2 tentativas com intervalo de 15s) para falhas
-    transitórias de JSON inválido ou formato inesperado da IA.
-    Falhas permanentes (API key inválida, anamnese ausente) não são retentadas.
+    Retry automático (até 2 tentativas com intervalo de 15s) para
+    TransientAIError (formato inválido, cobertura nutricional, alergias,
+    desequilíbrio de macros). PermanentAIError e exceções inesperadas
+    não são retentadas.
     """
     from .models import DietJob
-    from .services import AIService, AllergenViolation, MacroImbalanceError, NutritionDataGap
+    from .services import AIService, TransientAIError, PermanentAIError
 
     try:
         job = DietJob.objects.select_related('anamnese', 'user').get(pk=job_id)
@@ -57,8 +70,7 @@ def generate_diet_task(self, job_id: int) -> None:
     )
 
     try:
-        service = AIService()
-        diet_plan = service.generate_diet(job.anamnese)
+        diet_plan = AIService().generate_diet(job.anamnese)
 
         job.status = DietJob.STATUS_DONE
         job.diet_plan = diet_plan
@@ -69,45 +81,26 @@ def generate_diet_task(self, job_id: int) -> None:
             job_id, diet_plan.pk,
         )
 
-    except ValueError as exc:
-        # Falha transitória (JSON inválido, formato inesperado) — tenta novamente
-        error_msg = str(exc).lower()
-        is_transient = any(phrase in error_msg for phrase in _RETRYABLE_PHRASES)
-
-        if is_transient and self.request.retries < self.max_retries:
+    except TransientAIError as exc:
+        if self.request.retries < self.max_retries:
             logger.warning(
-                'generate_diet_task: DietJob#%s — falha transitória, reagendando retry %d. Erro: %s',
-                job_id, self.request.retries + 1, exc,
+                'generate_diet_task: DietJob#%s — falha transitória (%s), reagendando retry %d. Erro: %s',
+                job_id, type(exc).__name__, self.request.retries + 1, exc,
             )
-            # Volta para pending para que o retry passe pela guarda de status
             job.status = DietJob.STATUS_PENDING
             job.save(update_fields=['status', 'updated_at'])
             raise self.retry(exc=exc, countdown=15)
 
-        # Falha definitiva
         job.status = DietJob.STATUS_FAILED
-        if isinstance(exc, AllergenViolation):
-            job.error_message = (
-                'Não foi possível gerar um plano respeitando suas alergias após '
-                'várias tentativas. Verifique se o campo de alergias está claro '
-                '(ex: "amendoim, leite, frutos do mar") ou contate o suporte.'
-            )
-        elif isinstance(exc, NutritionDataGap):
-            job.error_message = (
-                'Não conseguimos gerar um plano com cálculos calóricos confiáveis '
-                'após várias tentativas. Tente reformular suas preferências '
-                'alimentares com termos mais comuns ou contate o suporte.'
-            )
-        elif isinstance(exc, MacroImbalanceError):
-            job.error_message = (
-                'Não conseguimos gerar um plano com macronutrientes equilibrados '
-                'após várias tentativas. Tente ajustar suas preferências alimentares '
-                'incluindo mais fontes de proteína (frango, ovos, peixe) ou contate o suporte.'
-            )
-        else:
-            job.error_message = str(exc)
+        job.error_message = _USER_MESSAGES.get(type(exc).__name__, str(exc))
         job.save(update_fields=['status', 'error_message', 'updated_at'])
         logger.error('generate_diet_task: DietJob#%s falhou definitivamente — %s', job_id, exc)
+
+    except PermanentAIError as exc:
+        job.status = DietJob.STATUS_FAILED
+        job.error_message = str(exc)
+        job.save(update_fields=['status', 'error_message', 'updated_at'])
+        logger.error('generate_diet_task: DietJob#%s erro permanente — %s', job_id, exc)
 
     except Exception as exc:
         job.status = DietJob.STATUS_FAILED

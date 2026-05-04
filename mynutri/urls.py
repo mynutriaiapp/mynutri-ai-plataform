@@ -27,6 +27,6 @@ urlpatterns = [
     # Backend
     path('health/', health_check, name='health-check'),
     path('admin/', admin.site.urls),
-    path('api/v1/', include('user.urls_api')),
-    path('api/v1/', include('nutrition.urls_api')),
+    path('api/v1/', include('user.urls_api', namespace='user')),
+    path('api/v1/', include('nutrition.urls_api', namespace='nutrition')),
 ]

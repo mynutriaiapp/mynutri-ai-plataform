@@ -13,6 +13,8 @@ from .api_views import (
     MealUndoAPIView,
 )
 
+app_name = 'nutrition'
+
 urlpatterns = [
     # POST /api/v1/anamnese               → Salva respostas do questionário nutricional
     path('anamnese', AnamneseAPIView.as_view(), name='api-anamnese'),

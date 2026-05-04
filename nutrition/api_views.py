@@ -406,12 +406,12 @@ class MealRegenerateAPIView(APIView):
         prev_raw_meal    = meals_raw[meal_index]
 
         # ── Chama AIService ───────────────────────────────────────────────────
-        from .services import AIService
+        from .services import AIService, DietGenerationError
         service = AIService()
 
         try:
             result = service.regenerate_meal(diet_plan, meal_index, reason)
-        except ValueError as exc:
+        except (ValueError, DietGenerationError) as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception:
             logger.exception(

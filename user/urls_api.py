@@ -5,6 +5,8 @@ from .api_views import (
     LogoutAPIView, CookieTokenRefreshView,
 )
 
+app_name = 'user'
+
 urlpatterns = [
     # POST /api/v1/auth/register       → Criação de conta + retorna token JWT + seta cookies
     path('auth/register', RegisterAPIView.as_view(), name='api-register'),
