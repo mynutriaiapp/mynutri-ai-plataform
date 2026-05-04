@@ -449,51 +449,10 @@
   </main>
 
   <!-- ===================== JAVASCRIPT ===================== -->
+  <script src="/static/src/js/utils/theme.js"></script>
+  <script src="/static/src/js/utils/http.js"></script>
+  <script src="/static/src/js/components/user-menu.js"></script>
   <script>
-    // --- Dark Mode System ---
-    (function() {
-      const THEME_KEY = 'mynutri_theme';
-      const html = document.documentElement;
-      const themeToggle = document.getElementById('theme-toggle');
-
-      function initializeTheme() {
-        const saved = localStorage.getItem(THEME_KEY);
-        if (saved) {
-          setTheme(saved);
-        } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-          setTheme('dark');
-        } else {
-          setTheme('light');
-        }
-      }
-
-      function setTheme(theme) {
-        if (theme === 'dark') {
-          html.classList.add('dark');
-          localStorage.setItem(THEME_KEY, 'dark');
-        } else {
-          html.classList.remove('dark');
-          localStorage.setItem(THEME_KEY, 'light');
-        }
-      }
-
-      function toggleTheme() {
-        const isDark = html.classList.contains('dark');
-        setTheme(isDark ? 'light' : 'dark');
-      }
-
-      initializeTheme();
-      if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
-
-      if (window.matchMedia) {
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-          if (!localStorage.getItem(THEME_KEY)) {
-            setTheme(e.matches ? 'dark' : 'light');
-          }
-        });
-      }
-    })();
-
     (() => {
       const totalSteps = 5;
       let currentStep = 1;
@@ -657,65 +616,6 @@
           goToStep(currentStep - 1);
         }
       });
-
-      // --- Session / User menu ---
-      const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://127.0.0.1:8000/api/v1' : '/api/v1';
-      const _user  = JSON.parse(localStorage.getItem('mynutri_user') || 'null');
-
-      let _refreshing = null;
-      async function apiFetch(url, opts = {}) {
-        opts = { credentials: 'include', ...opts };
-        let res = await fetch(url, opts);
-        if (res.status !== 401) return res;
-        if (!_refreshing) {
-          _refreshing = fetch(`${API_BASE}/auth/token/refresh`, { method: 'POST', credentials: 'include' })
-            .finally(() => { _refreshing = null; });
-        }
-        const refreshRes = await _refreshing;
-        if (!refreshRes.ok) {
-          localStorage.removeItem('mynutri_user');
-          window.location.href = '/auth/';
-          return res;
-        }
-        return fetch(url, opts);
-      }
-
-      function _initials(name) {
-        if (!name) return '?';
-        return name.trim().split(/\s+/).slice(0, 2).map(w => w[0].toUpperCase()).join('');
-      }
-
-      if (_user) {
-        document.getElementById('guestNav').style.display = 'none';
-        document.getElementById('authNav').style.display  = 'block';
-        document.getElementById('navAvatar').textContent     = _initials(_user.nome);
-        document.getElementById('navName').textContent       = _user.nome.split(' ')[0];
-        document.getElementById('dropdownName').textContent  = _user.nome;
-        document.getElementById('dropdownEmail').textContent = _user.email || '';
-      }
-
-      const _menuBtn  = document.getElementById('userMenuBtn');
-      const _dropdown = document.getElementById('userDropdown');
-      if (_menuBtn) {
-        _menuBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const open = _dropdown.classList.toggle('open');
-          _menuBtn.classList.toggle('open', open);
-        });
-        document.addEventListener('click', () => {
-          _dropdown.classList.remove('open');
-          _menuBtn.classList.remove('open');
-        });
-      }
-
-      const _logoutBtn = document.getElementById('logoutBtn');
-      if (_logoutBtn) {
-        _logoutBtn.addEventListener('click', async () => {
-          await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' });
-          localStorage.removeItem('mynutri_user');
-          window.location.href = '/';
-        });
-      }
 
       // --- Form Submit ---
 
@@ -1159,6 +1059,8 @@
       setupCustomSelects();
 
     })();
+
+    initUserMenu({ requireAuth: false, logoutRedirect: '/' });
   </script>
 
 </body>

@@ -183,51 +183,7 @@
     </div>
   </footer>
 
-  <script>
-    // --- Dark Mode System ---
-    (function() {
-      const THEME_KEY = 'mynutri_theme';
-      const html = document.documentElement;
-      const themeToggle = document.getElementById('theme-toggle');
-
-      function initializeTheme() {
-        const saved = localStorage.getItem(THEME_KEY);
-        if (saved) {
-          setTheme(saved);
-        } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-          setTheme('dark');
-        } else {
-          setTheme('light');
-        }
-      }
-
-      function setTheme(theme) {
-        if (theme === 'dark') {
-          html.classList.add('dark');
-          localStorage.setItem(THEME_KEY, 'dark');
-        } else {
-          html.classList.remove('dark');
-          localStorage.setItem(THEME_KEY, 'light');
-        }
-      }
-
-      function toggleTheme() {
-        const isDark = html.classList.contains('dark');
-        setTheme(isDark ? 'light' : 'dark');
-      }
-
-      initializeTheme();
-      if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
-
-      if (window.matchMedia) {
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-          if (!localStorage.getItem(THEME_KEY)) {
-            setTheme(e.matches ? 'dark' : 'light');
-          }
-        });
-      }
-    })();
-  </script>
+  <script src="/static/src/js/utils/theme.js"></script>
 
 </body>
 </html>

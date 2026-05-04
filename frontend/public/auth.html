@@ -106,72 +106,10 @@
     </div>
   </div>
 
+  <script src="/static/src/js/utils/theme.js"></script>
+  <script src="/static/src/js/utils/helpers.js"></script>
   <script>
-    // --- Dark Mode System ---
-    (function() {
-      const THEME_KEY = 'mynutri_theme';
-      const html = document.documentElement;
-      const themeToggle = document.getElementById('theme-toggle');
-
-      /**
-       * Initialize theme on page load
-       * Priority: localStorage > system preference > light mode
-       */
-      function initializeTheme() {
-        const saved = localStorage.getItem(THEME_KEY);
-
-        if (saved) {
-          // User has a saved preference
-          setTheme(saved);
-        } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-          // No saved preference, use system preference
-          setTheme('dark');
-        } else {
-          // Default to light mode
-          setTheme('light');
-        }
-      }
-
-      /**
-       * Apply theme by setting class on html element
-       */
-      function setTheme(theme) {
-        if (theme === 'dark') {
-          html.classList.add('dark');
-          localStorage.setItem(THEME_KEY, 'dark');
-        } else {
-          html.classList.remove('dark');
-          localStorage.setItem(THEME_KEY, 'light');
-        }
-      }
-
-      /**
-       * Toggle between light and dark theme
-       */
-      function toggleTheme() {
-        const isDark = html.classList.contains('dark');
-        setTheme(isDark ? 'light' : 'dark');
-      }
-
-      // Initialize theme on page load
-      initializeTheme();
-
-      // Listen for theme toggle button click
-      if (themeToggle) {
-        themeToggle.addEventListener('click', toggleTheme);
-      }
-
-      // Listen for system theme changes
-      if (window.matchMedia) {
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-          // Only update if user hasn't set a preference
-          if (!localStorage.getItem(THEME_KEY)) {
-            setTheme(e.matches ? 'dark' : 'light');
-          }
-        });
-      }
-    })();
-
+    const setLoading = setLoadingBtn;
     const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://127.0.0.1:8000/api/v1' : '/api/v1';
 
     // Exibe erros vindos do callback do Google OAuth (redirect flow)
@@ -215,14 +153,6 @@
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-    function setLoading(btn, loading) {
-      btn.disabled = loading;
-      btn.style.opacity = loading ? '0.7' : '1';
-      btn.style.pointerEvents = loading ? 'none' : '';
-      if (loading) btn.dataset.original = btn.textContent;
-      else btn.textContent = btn.dataset.original || btn.textContent;
-    }
-
     function showError(msg) {
       let el = document.getElementById('auth-error');
       if (!el) {
@@ -390,16 +320,7 @@
         .addEventListener('load', initGoogleSignIn);
     }
 
-    // Page transitions
-    document.querySelectorAll('a[href]').forEach(link => {
-      const href = link.getAttribute('href');
-      if (!href || href.startsWith('#') || href.startsWith('http')) return;
-      link.addEventListener('click', (e) => {
-        e.preventDefault();
-        document.body.classList.add('page-leaving');
-        setTimeout(() => { window.location.href = href; }, 260);
-      });
-    });
   </script>
+  <script src="/static/src/js/utils/transitions.js"></script>
 </body>
 </html>

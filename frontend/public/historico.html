@@ -117,121 +117,17 @@
     </div>
   </main>
 
+  <script src="/static/src/js/utils/theme.js"></script>
+  <script src="/static/src/js/utils/http.js"></script>
+  <script src="/static/src/js/utils/helpers.js"></script>
+  <script src="/static/src/js/components/user-menu.js"></script>
   <script>
-    // --- Dark Mode System ---
-    (function() {
-      const THEME_KEY = 'mynutri_theme';
-      const html = document.documentElement;
-      const themeToggle = document.getElementById('theme-toggle');
-
-      function initializeTheme() {
-        const saved = localStorage.getItem(THEME_KEY);
-        if (saved) {
-          setTheme(saved);
-        } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-          setTheme('dark');
-        } else {
-          setTheme('light');
-        }
-      }
-
-      function setTheme(theme) {
-        if (theme === 'dark') {
-          html.classList.add('dark');
-          localStorage.setItem(THEME_KEY, 'dark');
-        } else {
-          html.classList.remove('dark');
-          localStorage.setItem(THEME_KEY, 'light');
-        }
-      }
-
-      initializeTheme();
-      if (themeToggle) themeToggle.addEventListener('click', () => {
-        setTheme(html.classList.contains('dark') ? 'light' : 'dark');
-      });
-
-      if (window.matchMedia) {
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-          if (!localStorage.getItem(THEME_KEY)) setTheme(e.matches ? 'dark' : 'light');
-        });
-      }
-    })();
-
-    const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-      ? 'http://127.0.0.1:8000/api/v1'
-      : '/api/v1';
-
-    let _refreshing = null;
-    async function apiFetch(url, opts = {}) {
-      opts = { credentials: 'include', ...opts };
-      let res = await fetch(url, opts);
-      if (res.status !== 401) return res;
-      if (!_refreshing) {
-        _refreshing = fetch(`${API_BASE}/auth/token/refresh`, { method: 'POST', credentials: 'include' })
-          .finally(() => { _refreshing = null; });
-      }
-      const refreshRes = await _refreshing;
-      if (!refreshRes.ok) {
-        localStorage.removeItem('mynutri_user');
-        window.location.href = '/auth/';
-        return res;
-      }
-      return fetch(url, opts);
-    }
-
-    /* ── Auth guard ── */
-    const userData = JSON.parse(localStorage.getItem('mynutri_user') || 'null');
-
-    if (!userData) {
-      window.location.href = '/auth/';
-    }
-
-    /* ── Navbar ── */
-    const navAvatar    = document.getElementById('navAvatar');
-    const navName      = document.getElementById('navName');
-    const dropdownName  = document.getElementById('dropdownName');
-    const dropdownEmail = document.getElementById('dropdownEmail');
-
-    if (userData) {
-      const initials = (userData.nome || userData.email || '?')[0].toUpperCase();
-      navAvatar.textContent    = initials;
-      navName.textContent      = userData.nome || userData.email;
-      dropdownName.textContent  = userData.nome || '—';
-      dropdownEmail.textContent = userData.email || '—';
-    }
-
-    document.getElementById('userMenuBtn').addEventListener('click', (e) => {
-      e.stopPropagation();
-      document.getElementById('userDropdown').classList.toggle('open');
-    });
-    document.addEventListener('click', () => {
-      document.getElementById('userDropdown').classList.remove('open');
-    });
-
-    document.getElementById('logoutBtn').addEventListener('click', async () => {
-      await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' });
-      localStorage.removeItem('mynutri_user');
-      window.location.href = '/auth/';
-    });
+    initUserMenu({ requireAuth: true, logoutRedirect: '/auth/' });
 
     /* ── Helpers ── */
     function show(id)    { document.getElementById(id).style.display = ''; }
     function hide(id)    { document.getElementById(id).style.display = 'none'; }
     function showFlex(id){ document.getElementById(id).style.display = 'flex'; }
-
-    function formatDate(iso) {
-      const d = new Date(iso);
-      return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
-    }
-
-    function goalLabel(raw) {
-      if (!raw) return 'Plano alimentar';
-      const lower = raw.toLowerCase();
-      if (lower.includes('emagrecimento') || lower.includes('perda') || lower.includes('loss')) return 'Emagrecimento';
-      if (lower.includes('ganho') || lower.includes('hipertrofia') || lower.includes('gain'))   return 'Ganho de Massa';
-      if (lower.includes('manutenção') || lower.includes('manutencao') || lower.includes('maintain')) return 'Manutenção';
-      return raw;
-    }
 
     /* ── Load history ── */
     async function loadHistory() {

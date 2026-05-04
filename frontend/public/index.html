@@ -460,70 +460,11 @@
   </footer>
 
   <!-- ===================== JAVASCRIPT ===================== -->
+  <script src="/static/src/js/utils/theme.js"></script>
+  <script src="/static/src/js/utils/http.js"></script>
+  <script src="/static/src/js/utils/helpers.js"></script>
+  <script src="/static/src/js/components/user-menu.js"></script>
   <script>
-    // --- Dark Mode System ---
-    (function() {
-      const THEME_KEY = 'mynutri_theme';
-      const html = document.documentElement;
-      const themeToggle = document.getElementById('theme-toggle');
-
-      /**
-       * Initialize theme on page load
-       * Priority: localStorage > system preference > light mode
-       */
-      function initializeTheme() {
-        const saved = localStorage.getItem(THEME_KEY);
-
-        if (saved) {
-          // User has a saved preference
-          setTheme(saved);
-        } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-          // No saved preference, use system preference
-          setTheme('dark');
-        } else {
-          // Default to light mode
-          setTheme('light');
-        }
-      }
-
-      /**
-       * Apply theme by setting class on html element
-       */
-      function setTheme(theme) {
-        if (theme === 'dark') {
-          html.classList.add('dark');
-          localStorage.setItem(THEME_KEY, 'dark');
-        } else {
-          html.classList.remove('dark');
-          localStorage.setItem(THEME_KEY, 'light');
-        }
-      }
-
-      /**
-       * Toggle between light and dark theme
-       */
-      function toggleTheme() {
-        const isDark = html.classList.contains('dark');
-        setTheme(isDark ? 'light' : 'dark');
-      }
-
-      // Initialize theme on page load
-      initializeTheme();
-
-      // Listen for theme toggle button click
-      themeToggle.addEventListener('click', toggleTheme);
-
-      // Listen for system theme changes
-      if (window.matchMedia) {
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-          // Only update if user hasn't set a preference
-          if (!localStorage.getItem(THEME_KEY)) {
-            setTheme(e.matches ? 'dark' : 'light');
-          }
-        });
-      }
-    })();
-
     // --- Header scroll effect ---
     const header = document.getElementById('header');
     window.addEventListener('scroll', () => {
@@ -557,19 +498,6 @@
         spans[2].style.transform = '';
       });
     });
-
-    // --- Scroll reveal animations ---
-    const revealElements = document.querySelectorAll('.reveal');
-    const revealObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('visible');
-          revealObserver.unobserve(entry.target);
-        }
-      });
-    }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
-
-    revealElements.forEach(el => revealObserver.observe(el));
 
     // --- Smooth scroll for anchor links ---
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
@@ -616,90 +544,8 @@
     const heroStats = document.querySelector('.hero-stats');
     if (heroStats) statsObserver.observe(heroStats);
 
-    // --- Page transitions ---
-    (function () {
-      function navigateTo(url) {
-        document.body.classList.add('page-leaving');
-        setTimeout(() => { window.location.href = url; }, 260);
-      }
-      document.querySelectorAll('a[href]').forEach(link => {
-        const href = link.getAttribute('href');
-        if (!href || href.startsWith('#') || href.startsWith('http') || href.startsWith('mailto')) return;
-        link.addEventListener('click', (e) => {
-          e.preventDefault();
-          navigateTo(href);
-        });
-      });
-    })();
-
     // --- Session state: swap auth buttons for user dropdown ---
-    (function () {
-      const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://127.0.0.1:8000/api/v1' : '/api/v1';
-      // Sem dados de usuário → não está logado, mantém botões de guest
-      if (!localStorage.getItem('mynutri_user')) return;
-
-      function initials(name) {
-        if (!name) return '?';
-        return name.trim().split(/\s+/).slice(0, 2).map(w => w[0].toUpperCase()).join('');
-      }
-
-      function applyUserUI(user) {
-        document.getElementById('guestNav').style.display = 'none';
-        document.getElementById('authNav').style.display  = 'flex';
-        document.getElementById('navAvatar').textContent     = initials(user.nome);
-        document.getElementById('navName').textContent       = user.nome.split(' ')[0];
-        document.getElementById('dropdownName').textContent  = user.nome;
-        document.getElementById('dropdownEmail').textContent = user.email || '';
-      }
-
-      async function loadUser() {
-        // 1. Tenta o cache do localStorage primeiro (evita request desnecessário)
-        const cached = JSON.parse(localStorage.getItem('mynutri_user') || 'null');
-        if (cached?.nome) { applyUserUI(cached); return; }
-
-        // 2. Fallback: busca o perfil na API (cobre o caso de login sem user no localStorage)
-        try {
-          const res = await fetch(`${API_BASE}/user/profile`, { credentials: 'include' });
-
-          if (res.status === 401) {
-            localStorage.removeItem('mynutri_user');
-            return;
-          }
-
-          if (!res.ok) return;
-
-          const profile = await res.json();
-          const user = { id: profile.id, email: profile.email, nome: profile.nome };
-          localStorage.setItem('mynutri_user', JSON.stringify(user));
-          applyUserUI(user);
-        } catch {
-          // Servidor offline — não altera a UI
-        }
-      }
-
-      loadUser();
-
-      const menuBtn  = document.getElementById('userMenuBtn');
-      const dropdown = document.getElementById('userDropdown');
-
-      menuBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const isOpen = dropdown.classList.contains('open');
-        dropdown.classList.toggle('open', !isOpen);
-        menuBtn.classList.toggle('open', !isOpen);
-      });
-
-      document.addEventListener('click', () => {
-        dropdown.classList.remove('open');
-        menuBtn.classList.remove('open');
-      });
-
-      document.getElementById('logoutBtn').addEventListener('click', async () => {
-        await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' });
-        localStorage.removeItem('mynutri_user');
-        window.location.reload();
-      });
-    })();
+    initUserMenu({ requireAuth: false, logoutRedirect: '/' });
 
     // --- Testimonials carousel ---
     (function () {
@@ -1014,6 +860,8 @@
       }
     })();
   </script>
+  <script src="/static/src/js/utils/scroll-reveal.js"></script>
+  <script src="/static/src/js/utils/transitions.js"></script>
 
 </body>
 </html>
