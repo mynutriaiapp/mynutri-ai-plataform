@@ -54,7 +54,7 @@ async function initUserMenu(opts) {
   } else {
     try {
       const fetchFn = typeof apiFetch === 'function' ? apiFetch : fetch;
-      const res = await fetchFn(`${API_BASE}/user/profile`, { credentials: 'include' });
+      const res = await fetchFn(`${API_BASE}/user/profile`, { credentials: 'include', redirectOn401: false });
 
       if (res.status === 401) {
         localStorage.removeItem('mynutri_user');

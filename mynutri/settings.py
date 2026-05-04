@@ -84,6 +84,9 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+if DEBUG:
+    MIDDLEWARE.append('mynutri.middleware.NoCacheInDevMiddleware')
+
 ROOT_URLCONF = 'mynutri.urls'
 
 TEMPLATES = [
@@ -144,8 +147,13 @@ USE_TZ = True
 # =============================================================================
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STATICFILES_STORAGE = (
+    'django.contrib.staticfiles.storage.StaticFilesStorage'
+    if DEBUG else
+    'whitenoise.storage.CompressedManifestStaticFilesStorage'
+)
 STATICFILES_DIRS = [BASE_DIR / 'frontend']
+WHITENOISE_MAX_AGE = 0 if DEBUG else 31536000
 
 # =============================================================================
 # Django REST Framework
