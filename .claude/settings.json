@@ -19,10 +19,16 @@
       "Bash(python -m pytest nutrition/test_services.py::TestAdjustToCalorieTarget::test_com_grande_divergencia_escala_quantidades -q)",
       "Bash(python -m pytest nutrition/test_services.py::TestAdjustToCalorieTarget::test_com_grande_divergencia_escala_quantidades -v -s)",
       "Read(//c/c/Users/gabri/OneDrive/Área de Trabalho/**)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(git tag *)",
+      "Bash(gh release create v2.0.0 --title 'v2.0.0 - Official Release' --notes ' *)",
+      "Bash(git remote *)",
+      "Bash(python -m pytest nutrition/ user/ -x -q)",
+      "Bash(python -m pytest nutrition/ user/ -q)"
     ],
     "additionalDirectories": [
-      "\\tmp"
+      "\\tmp",
+      "c:\\Users\\gabri\\OneDrive\\Área de Trabalho\\mynutri-ai-plataform"
     ]
   }
 }
