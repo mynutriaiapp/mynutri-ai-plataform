@@ -155,16 +155,70 @@
 
           <!-- Panel: Perfil Nutricional -->
           <div class="panel" id="panel-nutricional">
-            <div class="card">
-              <div class="card-title">Perfil Nutricional</div>
-              <div class="card-subtitle">Informações registradas no seu questionário</div>
-              <div id="nutricionalContent">
-                <div style="display:flex;align-items:center;gap:10px;color:var(--gray-400);font-size:.9rem;">
-                  <div class="spinner" style="width:24px;height:24px;border-width:3px;"></div>
-                  Carregando…
-                </div>
+
+            <!-- Loading state -->
+            <div id="dashLoading" class="card" style="display:flex;align-items:center;gap:12px;color:var(--gray-400);font-size:.9rem;">
+              <div class="spinner" style="width:24px;height:24px;border-width:3px;"></div>
+              Carregando seu dashboard…
+            </div>
+
+            <!-- Empty state -->
+            <div id="dashEmpty" class="card" style="display:none;">
+              <div class="empty-state">
+                <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C8 2 5 6 5 10c0 5 7 12 7 12s7-7 7-12c0-4-3-8-7-8z"/><circle cx="12" cy="10" r="2"/></svg>
+                <p>Você ainda não preencheu o questionário nutricional.</p>
+                <a href="/questionario/" class="btn-save" style="text-decoration:none;display:inline-flex;">Preencher Questionário</a>
               </div>
             </div>
+
+            <!-- Dashboard content -->
+            <div id="dashContent" style="display:none;">
+
+              <!-- 1. Goal banner -->
+              <div id="dashGoalBanner" class="card" style="padding:20px 24px;margin-bottom:0;"></div>
+
+              <!-- 2. Métricas principais -->
+              <div class="card" style="margin-top:20px;">
+                <div class="card-title">Métricas Corporais</div>
+                <div class="card-subtitle">Calculadas com base no seu questionário</div>
+                <div class="dash-metrics" id="dashMetrics"></div>
+
+                <!-- Progress de completude do perfil -->
+                <div class="dash-section-title">Completude do Perfil</div>
+                <div class="progress-track">
+                  <div class="progress-fill" id="dashProgressFill" style="width:0%"></div>
+                </div>
+                <div class="progress-label">
+                  <span id="dashProgressSteps"></span>
+                  <span id="dashProgressPct" style="font-weight:700;color:var(--green-600);"></span>
+                </div>
+              </div>
+
+              <!-- 3. Distribuição de macros -->
+              <div class="card" style="margin-top:20px;" id="dashMacroCard">
+                <div class="card-title">Distribuição de Macronutrientes</div>
+                <div class="card-subtitle">Metas estimadas para sua dieta</div>
+                <div class="macro-chart-wrap" id="dashMacroWrap"></div>
+              </div>
+
+              <!-- 4. Histórico de dietas -->
+              <div class="card" style="margin-top:20px;" id="dashHistoryCard">
+                <div class="card-title">Histórico de Dietas</div>
+                <div class="card-subtitle">Planos gerados pela IA</div>
+                <div id="dashHistoryList"></div>
+              </div>
+
+              <!-- 5. Dados do questionário -->
+              <div class="card" style="margin-top:20px;">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                  Dados do Questionário
+                  <a href="/questionario/" style="font-size:.8rem;font-weight:600;color:var(--green-600);text-decoration:none;">Refazer →</a>
+                </div>
+                <div class="card-subtitle">Informações registradas na sua última anamnese</div>
+                <div class="anam-grid" id="dashAnamGrid"></div>
+              </div>
+
+            </div><!-- /dashContent -->
           </div>
 
           <!-- Panel: Segurança -->

@@ -39,29 +39,43 @@ python manage.py check --deploy   # checklist de produção
 O frontend é HTML/CSS/JS vanilla servido pelo próprio Django via `TemplateView`. As páginas ficam em `frontend/public/` e são mapeadas em `mynutri/urls.py`. Em produção, WhiteNoise serve os assets estáticos.
 
 A API segue o prefixo `/api/v1/` e é dividida em dois grupos de rotas:
-- `user/urls_api.py` → autenticação, perfil, contato
-- `nutrition/urls_api.py` → anamnese, geração e consulta de dieta
+- `user/urls_api.py` → autenticação (JWT + Google OAuth), perfil, troca de senha, contato, depoimentos
+- `nutrition/urls_api.py` → anamnese, geração assíncrona de dieta, histórico, PDF, substituições, regeneração de refeição
 
 ### Autenticação
 
 `CustomUser` (`user/models.py`) estende `AbstractUser` usando **email como username** (o campo `username` é preenchido automaticamente com o email). `EmailTokenObtainPairView` sobrescreve o login padrão do SimpleJWT para aceitar `{ email, password }` em vez de `{ username, password }`. Os tokens retornados usam o campo `token` (não `access`) para consistência com o endpoint de registro.
 
-### Fluxo de geração de dieta
+### Fluxo de geração de dieta (assíncrono)
 
 1. Usuário preenche o questionário → `POST /api/v1/anamnese` salva `Anamnese`
 2. Frontend redireciona para `dieta.html?generate=1` → `POST /api/v1/diet/generate`
-3. `DietGenerateAPIView` busca a última `Anamnese` do usuário e chama `AIService.generate_diet()`
-4. `AIService` calcula o alvo calórico (`prompts.calculate_calories()`), monta o prompt (`prompts.build_diet_prompt()`), chama a API externa e parseia o JSON
-5. Pós-processamento: `_normalize_diet_data()` recalcula totais a partir dos alimentos individuais; `_enforce_calorie_target()` escala as porções se a IA divergir >10% do alvo
-6. `DietPlan` e múltiplos `Meal` são criados em bulk no banco
+3. `DietGenerateAPIView` cria um `DietJob` (status=pending) e enfileira a task Celery; retorna `{ job_id }`
+4. Frontend faz polling em `GET /api/v1/diet/status/<job_id>` até `status=done`
+5. Worker Celery chama `AIService.generate_diet(anamnese)` em `nutrition/services.py`:
+   - **Passo 1** (temp=0.55): LLM seleciona alimentos e quantidades (sem calcular macros)
+   - **Backend**: `nutrition_db.py` calcula macros deterministicamente; `_adjust_to_calorie_target()` escala porções se desvio > 10%; `_round_portions()` arredonda para medidas práticas (11+ regras por categoria); `_enforce_allergies()` rejeita alérgenos; `_validate_macro_ratios()` valida limites fisiológicos
+   - **Substituições**: `generate_meal_substitutions()` gera substituições sem IA
+   - **Passos 2+3** em paralelo (temp=0.7): `_generate_notes()` e `_generate_explanation()` via `ThreadPoolExecutor`
+6. `DietPlan` e múltiplos `Meal` são criados em bulk; `DietJob.status` atualizado para `done`
+
+### Regeneração pontual de refeição
+
+- `PATCH /api/v1/diet/<diet_id>/meal/<meal_id>/regenerate` → `MealRegenerateAPIView`
+- Rate limit: 3 regenerações/dia por `DietPlan` (contado via `MealRegenerationLog`)
+- Estado anterior salvo em `MealRegenerationLog` para suportar undo
+- `POST /api/v1/diet/<diet_id>/meal/<meal_id>/undo` → `MealUndoAPIView` restaura o estado anterior
 
 ### Modelos de dados
 
 - `CustomUser` → `Profile` (OneToOne, criado automaticamente no registro)
-- `CustomUser` → `Anamnese` (múltiplas por usuário; a mais recente é usada para geração)
-- `Anamnese` → `DietPlan` (SET_NULL se anamnese deletada)
+- `CustomUser` → `Testimonial[]` (depoimentos da landing page — `user/models.py`)
+- `CustomUser` → `Anamnese[]` (múltiplas por usuário; a mais recente é usada para geração)
+- `Anamnese` → `DietJob[]` (SET_NULL se anamnese deletada)
+- `DietJob` → `DietPlan` (OneToOne, SET_NULL; rastreia estado pending→processing→done/failed)
 - `DietPlan` → `Meal[]` (bulk_create; campo `order` define a sequência)
-- `DietPlan.raw_response` armazena o JSON completo da IA para reprocessamento futuro
+- `DietPlan` → `MealRegenerationLog[]` (histórico de regenerações com JSON anterior para undo)
+- `DietPlan.raw_response` armazena o JSON completo (enriquecido com macros do backend)
 
 ### Rate limiting
 

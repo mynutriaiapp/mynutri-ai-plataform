@@ -2,7 +2,7 @@
 
 ## Visão Geral
 
-O banco de dados é responsável por armazenar todas as informações da aplicação, incluindo dados dos usuários, respostas da anamnese e planos alimentares gerados.
+O banco de dados é responsável por armazenar todas as informações da aplicação, incluindo dados dos usuários, respostas da anamnese, planos alimentares gerados e logs de regeneração.
 
 - **Desenvolvimento:** SQLite (`db.sqlite3`)
 - **Produção:** PostgreSQL (configurar via `DATABASE_URL` no `.env`)
@@ -14,8 +14,15 @@ erDiagram
     users ||--o| profiles : "tem"
     users ||--o{ anamnese : "responde"
     users ||--o{ diet_plans : "possui"
-    anamnese ||--o{ diet_plans : "gera"
+    users ||--o{ diet_jobs : "dispara"
+    users ||--o{ testimonials : "escreve"
+    users ||--o{ meal_regeneration_logs : "gera"
+    anamnese ||--o{ diet_plans : "origina"
+    anamnese ||--o{ diet_jobs : "origina"
     diet_plans ||--o{ meals : "contém"
+    diet_plans ||--o{ meal_regeneration_logs : "registra"
+    diet_plans ||--o| diet_jobs : "resultado de"
+    meals ||--o{ meal_regeneration_logs : "registra"
 
     users {
         int id PK
@@ -79,6 +86,39 @@ erDiagram
         text description
         int calories
         int order
+    }
+
+    diet_jobs {
+        int id PK
+        int user_id FK
+        int anamnese_id FK
+        int diet_plan_id FK
+        string status
+        text error_message
+        datetime created_at
+        datetime updated_at
+    }
+
+    meal_regeneration_logs {
+        int id PK
+        int diet_plan_id FK
+        int meal_id FK
+        int user_id FK
+        text reason
+        text previous_description
+        int previous_calories
+        json previous_raw_meal
+        bool is_undone
+        datetime created_at
+    }
+
+    testimonials {
+        int id PK
+        int user_id FK
+        text text
+        int rating
+        bool is_approved
+        datetime created_at
     }
 ```
 
@@ -188,6 +228,71 @@ Relacionamento: `meals.diet_plan_id → diet_plans.id` (CASCADE)
 
 ---
 
+## Tabela: diet_jobs (DietJob)
+
+Rastreia o estado de uma geração de dieta assíncrona via Celery. Criado no momento do `POST /api/v1/diet/generate`; o frontend faz polling em `GET /api/v1/diet/status/<job_id>`.
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | int (PK) | ID auto-incremento — usado como `job_id` no polling |
+| `user_id` | int (FK) | Referência ao `CustomUser` |
+| `anamnese_id` | int (FK, nullable) | Anamnese usada para gerar a dieta |
+| `diet_plan_id` | int (FK, nullable, OneToOne) | Plano gerado ao concluir |
+| `status` | string | `pending` → `processing` → `done` / `failed` |
+| `error_message` | text | Detalhe do erro se `status = failed` |
+| `created_at` | datetime | Data/hora de criação do job |
+| `updated_at` | datetime | Última atualização de status |
+
+Relacionamentos:
+- `diet_jobs.user_id → users.id`
+- `diet_jobs.anamnese_id → anamnese.id` (SET_NULL)
+- `diet_jobs.diet_plan_id → diet_plans.id` (SET_NULL, OneToOne)
+
+---
+
+## Tabela: meal_regeneration_logs (MealRegenerationLog)
+
+Registra cada regeneração pontual de uma refeição. Usado para rate limiting (3/dia por DietPlan), auditoria e suporte a desfazer.
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | int (PK) | ID auto-incremento |
+| `diet_plan_id` | int (FK) | Referência ao `DietPlan` |
+| `meal_id` | int (FK) | Referência à `Meal` alterada |
+| `user_id` | int (FK) | Referência ao `CustomUser` |
+| `reason` | text | Motivo informado pelo usuário (opcional) |
+| `previous_description` | text | Descrição da refeição antes da regeneração |
+| `previous_calories` | int | Calorias antes da regeneração |
+| `previous_raw_meal` | JSON | Estado completo da refeição anterior |
+| `is_undone` | bool | `true` se a regeneração foi desfeita |
+| `created_at` | datetime | Data/hora da regeneração |
+
+Índice composto: `(diet_plan_id, created_at, is_undone)` — otimizado para a query de rate limiting.
+
+Relacionamentos:
+- `meal_regeneration_logs.diet_plan_id → diet_plans.id` (CASCADE)
+- `meal_regeneration_logs.meal_id → meals.id` (CASCADE)
+- `meal_regeneration_logs.user_id → users.id` (CASCADE)
+
+---
+
+## Tabela: testimonials (Testimonial)
+
+Depoimentos de usuários autenticados exibidos na landing page.
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | int (PK) | ID auto-incremento |
+| `user_id` | int (FK) | Referência ao `CustomUser` |
+| `text` | text (max 500) | Texto do depoimento |
+| `rating` | int | Nota de 1 a 5 estrelas |
+| `is_approved` | bool | `true` por padrão; moderação manual pelo admin |
+| `created_at` | datetime | Data/hora de criação |
+
+Relacionamento: `testimonials.user_id → users.id` (CASCADE)
+
+---
+
 ## Valores Aceitos nos Campos de Choice
 
 ### gender
@@ -212,3 +317,11 @@ Relacionamento: `meals.diet_plan_id → diet_plans.id` (CASCADE)
 | `lose` | Emagrecimento |
 | `maintain` | Manutenção |
 | `gain` | Hipertrofia / Ganho de Massa |
+
+### status (DietJob)
+| Valor | Descrição |
+|-------|-----------|
+| `pending` | Job criado, aguardando worker Celery |
+| `processing` | Worker processando a geração |
+| `done` | Geração concluída com sucesso |
+| `failed` | Geração falhou (ver `error_message`) |

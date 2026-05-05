@@ -14,15 +14,24 @@
 
 ---
 
-## 🔜 Versão 2 — Histórico e Dashboard
+## ✅ Versão 2 — Histórico, Dashboard e UX (Concluído — Maio 2026)
 
-- [ ] Histórico de dietas (`GET /api/v1/diet/list`)
-- [ ] Dieta por ID (`GET /api/v1/diet/<id>`)
-- [ ] Página `historico.html`
+- [x] Histórico de dietas (`GET /api/v1/diet/list`)
+- [x] Dieta por ID (`GET /api/v1/diet/<id>`)
+- [x] Página `historico.html`
+- [x] Dark mode toggle (com persistência e detecção de sistema)
+- [x] Login com Google OAuth (`POST /api/v1/auth/google`)
+- [x] Logout com limpeza de cookies HttpOnly (`POST /api/v1/auth/logout`)
+- [x] Troca de senha (`POST /api/v1/user/change-password`)
+- [x] Exportação do plano alimentar em PDF (`GET /api/v1/diet/<id>/pdf`)
+- [x] Regeneração pontual de refeições (`PATCH /api/v1/diet/<id>/meal/<id>/regenerate`)
+- [x] Desfazer regeneração (`POST /api/v1/diet/<id>/meal/<id>/undo`)
+- [x] Sistema de depoimentos na landing page (`GET/POST /api/v1/testimonials`)
+- [x] Geração assíncrona via Celery + polling por job_id
+- [x] Pré-preenchimento de questionário com última anamnese (`GET /api/v1/anamnese/last`)
+- [x] Testes automatizados com pytest (backend)
 - [ ] Dashboard nutricional (`dashboard.html`)
-- [ ] Ajuste automático de dieta ("Aumentar/Diminuir calorias")
-- [ ] Dark mode toggle
-- [ ] Testes automatizados: pytest (backend) + Cypress (frontend)
+- [ ] Testes de integração com Cypress (frontend)
 
 ---
 
@@ -30,16 +39,15 @@
 
 - [ ] CI/CD com GitHub Actions
 - [ ] Docker + docker-compose
-- [ ] Deploy em servidor cloud (Railway, Render ou VPS)
+- [ ] Deploy em servidor cloud (Render — `render.yaml` já configurado)
 - [ ] Migração para PostgreSQL em produção
-- [ ] Monitoramento de erros (Sentry)
+- [ ] Monitoramento de erros (Sentry — integração parcial no `settings.py`)
 - [ ] CDN para assets frontend
 
 ---
 
 ## 📱 Versão 3.5 — Mobile e Integrações
 
-- [ ] Exportação do plano alimentar em PDF
 - [ ] Integração com API de alimentos (FatSecretAPI)
 - [ ] React Native app (iOS + Android)
 - [ ] Integração com wearables (Fitbit, Apple Watch)
