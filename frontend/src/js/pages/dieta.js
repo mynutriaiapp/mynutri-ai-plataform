@@ -497,11 +497,48 @@ document.addEventListener('keydown', e => {
 //  REGENERAÇÃO DE REFEIÇÃO
 // ════════════════════════════════
 
+function _isOffTopicReason(text) {
+  if (!text) return false;
+  // Rejeita mensagens que claramente não são sobre a refeição.
+  // Heurística: presença de palavras-chave de outros domínios sem nenhuma
+  // palavra relacionada a comida/dieta.
+  const foodWords = [
+    'refeição','comida','alimento','ingrediente','proteína','caloria','dieta',
+    'café','almoço','jantar','lanche','frango','carne','peixe','ovo','arroz',
+    'feijão','massa','salada','fruta','iogurte','pão','queijo','sabor','gosto',
+    'prático','simples','barato','caro','ingrediente','receita','preparo',
+  ];
+  const lc = text.toLowerCase();
+  const hasFoodWord = foodWords.some(w => lc.includes(w));
+  if (hasFoodWord) return false;
+
+  const offTopicPatterns = [
+    /f[oó]rmula/i, /equa[cç][aã]o/i, /matem[aá]tica/i, /f[ií]sica/i,
+    /qu[ií]mica/i, /hist[oó]ria/i, /geograf[ií]a/i, /pol[ií]tica/i,
+    /programa[cç][aã]o/i, /c[oó]digo/i, /javascript/i, /python/i,
+    /me (informe|explique|ensine|conte|diga)/i,
+    /o que [eé]/i, /como funciona/i, /quem [eé]/i,
+    /baskara/i, /pitagoras/i,
+  ];
+  return offTopicPatterns.some(p => p.test(text));
+}
+
 async function regenerateMeal() {
   if (!_currentModalMealId || !dietData?.id) return;
 
   const reason = (document.getElementById('regen-reason').value || '').trim();
   const idx    = _currentModalMealIndex;
+
+  // Bloqueia mensagens fora do contexto de refeição antes de chamar a API
+  if (_isOffTopicReason(reason)) {
+    openChatDock();
+    _addUserMessageToChat(reason);
+    _addChatMessage(
+      'Só consigo ajudar com a sua refeição. Me diga, por exemplo, se quer algo mais prático, se não tem algum ingrediente ou se prefere outro sabor.',
+      'bot',
+    );
+    return;
+  }
 
   // Snapshot "antes" — a UI não muda até o usuário confirmar
   const beforeRaw   = (dietData.meals_raw || [])[idx] || {};

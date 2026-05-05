@@ -41,6 +41,14 @@ _FAT_KEYWORDS = frozenset([
     'abacate', 'coco', 'bacon', 'banha', 'toucinho',
 ])
 
+# Bebidas de calorias zero ou negligenciáveis — nunca devem ser escaladas
+# para compensar déficit calórico de outros alimentos.
+_ZERO_CALORIE_KEYWORDS = frozenset([
+    'refrigerante zero', 'refrigerante diet', 'refrigerante light',
+    'coca zero', 'coca cola zero', 'pepsi zero', 'guarana zero',
+    'bebida zero', 'agua', 'cha verde', 'cha', 'cafe preto', 'cafe',
+])
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  ARREDONDAMENTO DE PORÇÕES — medidas práticas de consumo
 # ─────────────────────────────────────────────────────────────────────────────
@@ -550,6 +558,12 @@ class AIService:
         normalized = _strip_accents(food_name.lower())
         return any(kw in normalized for kw in _FAT_KEYWORDS)
 
+    @staticmethod
+    def _is_zero_calorie_drink(food_name: str) -> bool:
+        """Retorna True para bebidas zero/diet que não devem ser escaladas."""
+        normalized = _strip_accents(food_name.lower())
+        return any(kw in normalized for kw in _ZERO_CALORIE_KEYWORDS)
+
     def _adjust_to_calorie_target(self, diet_data: dict, target_calories: int) -> dict:
         """
         Se o total calculado divergir mais de 10% do alvo, ajusta quantity_g
@@ -582,7 +596,10 @@ class AIService:
                 old_qty = float(food.get('quantity_g') or 100)
                 name    = food.get('name', '')
 
-                if self._is_protein_food(name):
+                if self._is_zero_calorie_drink(name):
+                    # Bebidas zero/diet: sem escalonamento — porção não afeta calorias
+                    applied_scale = 1.0
+                elif self._is_protein_food(name):
                     # Proteínas: cap ±15% para preservar adequação proteica
                     applied_scale = max(0.85, min(1.15, scale))
                 elif self._is_fat_food(name):
@@ -1200,6 +1217,18 @@ class AIService:
         # Rejeita refeição com cobertura insuficiente — usuário pode tentar de novo manualmente
         self._check_db_coverage(db_stats, diet_plan.anamnese)
         enriched = self._round_portions(enriched)
+
+        # Ajusta calorias da refeição para ficar dentro de ±10% do alvo original.
+        # Sem isso o arredondamento de porções pode tirar 150-200 kcal silenciosamente.
+        meal_calorie_target = sum(
+            f.get('calories', 0) for f in current_meal.get('foods', [])
+        )
+        if meal_calorie_target > 0:
+            meal_total = sum(f.get('calories', 0) for f in enriched['meals'][0].get('foods', []))
+            wrapper = {'calories': meal_total, 'meals': enriched['meals']}
+            wrapper = self._adjust_to_calorie_target(wrapper, meal_calorie_target)
+            enriched = {'meals': wrapper['meals']}
+
         new_meal = enriched['meals'][0]
 
         foods = new_meal.get('foods', [])
