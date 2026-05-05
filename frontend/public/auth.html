@@ -15,7 +15,10 @@
   <header class="header scrolled" style="position: relative;">
     <div class="container header-inner" style="justify-content: space-between;">
       <a href="/" class="logo">
-        <img src="/static/src/assets/mynutriai-logo.png" alt="MyNutri AI" />
+        <picture>
+            <source srcset="/static/src/assets/mynutriai-logo.webp" type="image/webp">
+            <img src="/static/src/assets/mynutriai-logo.png" alt="MyNutri AI">
+          </picture>
         MyNutri <span>AI</span>
       </a>
       <!-- Dark Mode Toggle -->
@@ -106,10 +109,10 @@
     </div>
   </div>
 
-  <script src="/static/src/js/utils/theme.js"></script>
-  <script src="/static/src/js/utils/http.js"></script>
-  <script src="/static/src/js/utils/helpers.js"></script>
-  <script src="/static/src/js/pages/auth.js"></script>
-  <script src="/static/src/js/utils/transitions.js"></script>
+  <script src="/static/src/js/utils/theme.js" defer></script>
+  <script src="/static/src/js/utils/http.js" defer></script>
+  <script src="/static/src/js/utils/helpers.js" defer></script>
+  <script src="/static/src/js/pages/auth.js" defer></script>
+  <script src="/static/src/js/utils/transitions.js" defer></script>
 </body>
 </html>

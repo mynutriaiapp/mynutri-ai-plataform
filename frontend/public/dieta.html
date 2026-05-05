@@ -18,7 +18,10 @@
   <header class="header scrolled" id="header">
     <div class="container header-inner">
       <a href="/" class="logo">
-        <img src="/static/src/assets/mynutriai-logo.png" alt="MyNutri AI" />
+        <picture>
+            <source srcset="/static/src/assets/mynutriai-logo.webp" type="image/webp">
+            <img src="/static/src/assets/mynutriai-logo.png" alt="MyNutri AI">
+          </picture>
         MyNutri <span>AI</span>
       </a>
 
@@ -404,12 +407,12 @@
     </div>
   </main>
 
-  <script src="/static/src/js/utils/theme.js"></script>
-  <script src="/static/src/js/utils/http.js"></script>
-  <script src="/static/src/js/utils/helpers.js"></script>
-  <script src="/static/src/js/components/user-menu.js"></script>
-  <script src="/static/src/js/pages/dieta.js"></script>
-  <script src="/static/src/js/utils/transitions.js"></script>
+  <script src="/static/src/js/utils/theme.js" defer></script>
+  <script src="/static/src/js/utils/http.js" defer></script>
+  <script src="/static/src/js/utils/helpers.js" defer></script>
+  <script src="/static/src/js/components/user-menu.js" defer></script>
+  <script src="/static/src/js/pages/dieta.js" defer></script>
+  <script src="/static/src/js/utils/transitions.js" defer></script>
   <div class="sub-toast" id="sub-toast" role="status" aria-live="polite"></div>
 </body>
 </html>
