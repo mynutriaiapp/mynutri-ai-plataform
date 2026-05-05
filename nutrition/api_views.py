@@ -3,6 +3,9 @@ from datetime import timedelta
 
 from django.http import HttpResponse
 from django.utils import timezone
+
+# Jobs em 'processing' por mais deste tempo são considerados travados (worker morreu)
+_STUCK_JOB_TIMEOUT = timedelta(minutes=5)
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -94,16 +97,31 @@ class DietGenerateAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Bloqueia se já houver um job em andamento para este usuário
+        # Bloqueia se já houver um job em andamento para este usuário.
+        # Exceção: jobs em 'processing' por mais de 15 min são considerados travados
+        # (worker morreu/reiniciou) e marcados como failed para desbloquear o usuário.
         in_progress = DietJob.objects.filter(
             user=request.user,
             status__in=[DietJob.STATUS_PENDING, DietJob.STATUS_PROCESSING],
         ).first()
         if in_progress:
-            return Response(
-                {'job_id': in_progress.pk, 'status': in_progress.status},
-                status=status.HTTP_202_ACCEPTED,
-            )
+            stuck_cutoff = timezone.now() - _STUCK_JOB_TIMEOUT
+            if (
+                in_progress.status == DietJob.STATUS_PROCESSING
+                and in_progress.updated_at < stuck_cutoff
+            ):
+                in_progress.status = DietJob.STATUS_FAILED
+                in_progress.error_message = (
+                    'Geração interrompida: o servidor foi reiniciado durante o processamento. '
+                    'Tente gerar sua dieta novamente.'
+                )
+                in_progress.save(update_fields=['status', 'error_message', 'updated_at'])
+                logger.warning('DietJob#%s marcado como failed (travado).', in_progress.pk)
+            else:
+                return Response(
+                    {'job_id': in_progress.pk, 'status': in_progress.status},
+                    status=status.HTTP_202_ACCEPTED,
+                )
 
         job = DietJob.objects.create(user=request.user, anamnese=anamnese)
 
@@ -134,6 +152,19 @@ class DietJobStatusAPIView(APIView):
             job = DietJob.objects.get(pk=job_id, user=request.user)
         except DietJob.DoesNotExist:
             return Response({'error': 'Job não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Auto-recuperação: job travado em 'processing' sem atualização por 15+ min
+        # indica que o worker morreu — converte para 'failed' para o frontend exibir erro.
+        if job.status == DietJob.STATUS_PROCESSING:
+            stuck_cutoff = timezone.now() - _STUCK_JOB_TIMEOUT
+            if job.updated_at < stuck_cutoff:
+                job.status = DietJob.STATUS_FAILED
+                job.error_message = (
+                    'Geração interrompida: o servidor foi reiniciado durante o processamento. '
+                    'Tente gerar sua dieta novamente.'
+                )
+                job.save(update_fields=['status', 'error_message', 'updated_at'])
+                logger.warning('DietJob#%s detectado como travado via polling — marcado como failed.', job.pk)
 
         payload = {'status': job.status, 'diet_plan_id': None}
 
@@ -174,19 +205,31 @@ class DietAPIView(APIView):
 class DietListAPIView(APIView):
     """
     GET /api/v1/diet/list
-    Retorna o histórico completo de planos alimentares do usuário logado,
-    ordenado do mais recente para o mais antigo.
+    Retorna o histórico de planos alimentares do usuário logado (paginado, 10/página).
+    Parâmetros: ?page=<n>
     Requer: Authorization: Bearer <token>
     """
     permission_classes = [IsAuthenticated]
+    PAGE_SIZE = 10
 
     def get(self, request):
-        diet_plans = (
-            DietPlan.objects.filter(user=request.user)
-            .order_by('-created_at')
-        )
+        try:
+            page = max(1, int(request.query_params.get('page', 1)))
+        except (ValueError, TypeError):
+            page = 1
+
+        offset = (page - 1) * self.PAGE_SIZE
+        qs = DietPlan.objects.filter(user=request.user).order_by('-created_at')
+        total = qs.count()
+        diet_plans = qs[offset:offset + self.PAGE_SIZE]
+
         serializer = DietPlanSummarySerializer(diet_plans, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response({
+            'results': serializer.data,
+            'count': total,
+            'page': page,
+            'total_pages': max(1, (total + self.PAGE_SIZE - 1) // self.PAGE_SIZE),
+        }, status=status.HTTP_200_OK)
 
 
 class DietDetailAPIView(APIView):
@@ -291,7 +334,9 @@ class DietPDFAPIView(APIView):
     def get(self, request, pk):
         try:
             diet_plan = (
-                DietPlan.objects.prefetch_related('meals')
+                DietPlan.objects
+                .select_related('user', 'anamnese')
+                .prefetch_related('meals')
                 .get(pk=pk, user=request.user)
             )
         except DietPlan.DoesNotExist:

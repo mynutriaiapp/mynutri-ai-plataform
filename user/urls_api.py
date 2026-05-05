@@ -2,7 +2,7 @@ from django.urls import path
 from .api_views import (
     RegisterAPIView, ProfileAPIView, EmailTokenObtainPairView,
     ContactAPIView, GoogleAuthAPIView, GoogleOAuthCallbackView, TestimonialAPIView,
-    LogoutAPIView, CookieTokenRefreshView,
+    LogoutAPIView, CookieTokenRefreshView, ChangePasswordAPIView,
 )
 
 app_name = 'user'
@@ -26,8 +26,12 @@ urlpatterns = [
     # POST /api/v1/auth/logout         → Remove cookies HttpOnly de autenticação
     path('auth/logout', LogoutAPIView.as_view(), name='api-logout'),
 
-    # GET /api/v1/user/profile         → Dados do usuário logado
+    # GET   /api/v1/user/profile       → Dados do usuário logado
+    # PATCH /api/v1/user/profile       → Atualiza nome, telefone, data de nascimento
     path('user/profile', ProfileAPIView.as_view(), name='api-profile'),
+
+    # POST /api/v1/user/change-password → Altera senha (requer current_password + new_password)
+    path('user/change-password', ChangePasswordAPIView.as_view(), name='api-change-password'),
 
     # POST /api/v1/contact             → Envia e-mail de contato (público, rate-limit 5/h)
     path('contact', ContactAPIView.as_view(), name='api-contact'),

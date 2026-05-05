@@ -64,8 +64,8 @@ def validate_free_text(value, field_name):
 
     Proteções em camadas:
     1. Limite de comprimento
-    2. Remoção de caracteres de controle invisíveis
-    3. Normalização Unicode (NFKC) antes da varredura — previne bypass com homoglifos
+    2. Normalização Unicode (NFKC) + remoção de chars de controle invisíveis
+    3. Rejeição de texto que vira vazio após normalização (bypass com zero-width chars)
     4. Varredura com 20+ padrões cobrindo inglês, português e técnicas de delimiter injection
     5. Detecção de anomalias: razão anormal de caracteres especiais
     """
@@ -74,12 +74,14 @@ def validate_free_text(value, field_name):
             f'{field_name} não pode exceder {MAX_TEXT_LENGTH} caracteres.'
         )
 
-    if not value.strip():
-        return value
-
+    # Normaliza ANTES de checar se está vazio — evita bypass com zero-width chars
+    # (ex: "​​" passa pelo strip() do Python mas some após _normalize)
     normalized = _normalize(value)
 
-    # Detecção de anomalia: texto legítimo raramente tem >30% de caracteres não-alfanuméricos
+    if not normalized.strip():
+        return value
+
+    # Detecção de anomalia: texto legítimo raramente tem >35% de caracteres não-alfanuméricos
     # (exclui espaços da contagem para não penalizar frases normais)
     non_space = normalized.replace(' ', '')
     if non_space:

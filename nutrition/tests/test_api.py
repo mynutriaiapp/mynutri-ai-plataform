@@ -1,12 +1,17 @@
 """
-Testes da app nutrition — MyNutri AI
-Cobre: Anamnese (POST), DietPlan (GET), modelos, serializers e validações.
-AIService é mockado para não depender de API externa.
+Testes de API REST — MyNutri AI.
+
+Cobre: POST /api/v1/anamnese, POST/GET /api/v1/diet, GET /api/v1/diet/status/<id>,
+       modelos (Anamnese, DietPlan, Meal), health check, rate limiting e validação
+       de limites do AnamneseSerializer.
 """
 
+import json
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from django.contrib.auth import get_user_model
+from django.test import override_settings
+from django.core.cache import cache
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -26,7 +31,11 @@ def api_client():
 
 @pytest.fixture
 def create_user(db):
-    def _create(email='nutri@teste.com', nome='Nutri Teste', senha='senhaSegura123'):
+    counter = {'n': 0}
+    def _create(email=None, nome='Teste', senha='senhaSegura123'):
+        counter['n'] += 1
+        if email is None:
+            email = f'user{counter["n"]}@api.com'
         return User.objects.create_user(
             username=email, email=email, password=senha, first_name=nome
         )
@@ -59,10 +68,9 @@ def anamnese_data():
 
 @pytest.fixture
 def create_anamnese(db, create_user):
-    """Cria uma Anamnese no banco para um usuário."""
     def _create(user=None, **kwargs):
         if user is None:
-            user = create_user(email='anamnese@teste.com')
+            user = create_user(email='anamnese@api.com')
         defaults = {
             'age': 25,
             'gender': 'M',
@@ -86,124 +94,56 @@ FAKE_AI_RESPONSE = {
             'name': 'Café da manhã',
             'time_suggestion': '07:00',
             'foods': [
-                {
-                    'name': 'Ovos mexidos',
-                    'quantity': '3 unidades',
-                    'calories': 220,
-                    'protein_g': 18,
-                    'carbs_g': 1,
-                    'fat_g': 15,
-                },
-                {
-                    'name': 'Pão integral',
-                    'quantity': '2 fatias',
-                    'calories': 160,
-                    'protein_g': 6,
-                    'carbs_g': 30,
-                    'fat_g': 2,
-                },
+                {'name': 'Ovos mexidos', 'quantity': '3 unidades',
+                 'calories': 220, 'protein_g': 18, 'carbs_g': 1, 'fat_g': 15},
+                {'name': 'Pão integral', 'quantity': '2 fatias',
+                 'calories': 160, 'protein_g': 6, 'carbs_g': 30, 'fat_g': 2},
             ],
         },
         {
             'name': 'Almoço',
             'time_suggestion': '12:00',
             'foods': [
-                {
-                    'name': 'Frango grelhado',
-                    'quantity': '150g',
-                    'calories': 200,
-                    'protein_g': 35,
-                    'carbs_g': 0,
-                    'fat_g': 5,
-                },
-                {
-                    'name': 'Arroz integral',
-                    'quantity': '150g',
-                    'calories': 180,
-                    'protein_g': 4,
-                    'carbs_g': 38,
-                    'fat_g': 1,
-                },
-                {
-                    'name': 'Feijão cozido',
-                    'quantity': '2 conchas',
-                    'calories': 150,
-                    'protein_g': 9,
-                    'carbs_g': 27,
-                    'fat_g': 1,
-                },
+                {'name': 'Frango grelhado', 'quantity': '150g',
+                 'calories': 200, 'protein_g': 35, 'carbs_g': 0, 'fat_g': 5},
+                {'name': 'Arroz integral', 'quantity': '150g',
+                 'calories': 180, 'protein_g': 4, 'carbs_g': 38, 'fat_g': 1},
+                {'name': 'Feijão cozido', 'quantity': '2 conchas',
+                 'calories': 150, 'protein_g': 9, 'carbs_g': 27, 'fat_g': 1},
             ],
         },
         {
             'name': 'Jantar',
             'time_suggestion': '19:00',
             'foods': [
-                {
-                    'name': 'Tilápia grelhada',
-                    'quantity': '150g',
-                    'calories': 180,
-                    'protein_g': 32,
-                    'carbs_g': 0,
-                    'fat_g': 5,
-                },
-                {
-                    'name': 'Batata-doce',
-                    'quantity': '150g',
-                    'calories': 150,
-                    'protein_g': 2,
-                    'carbs_g': 35,
-                    'fat_g': 0,
-                },
-                {
-                    'name': 'Brócolis',
-                    'quantity': '100g',
-                    'calories': 35,
-                    'protein_g': 3,
-                    'carbs_g': 7,
-                    'fat_g': 0,
-                },
+                {'name': 'Tilápia grelhada', 'quantity': '150g',
+                 'calories': 180, 'protein_g': 32, 'carbs_g': 0, 'fat_g': 5},
+                {'name': 'Batata-doce', 'quantity': '150g',
+                 'calories': 150, 'protein_g': 2, 'carbs_g': 35, 'fat_g': 0},
+                {'name': 'Brócolis', 'quantity': '100g',
+                 'calories': 35, 'protein_g': 3, 'carbs_g': 7, 'fat_g': 0},
             ],
         },
         {
             'name': 'Lanche',
             'time_suggestion': '15:00',
             'foods': [
-                {
-                    'name': 'Banana',
-                    'quantity': '1 unidade',
-                    'calories': 90,
-                    'protein_g': 1,
-                    'carbs_g': 23,
-                    'fat_g': 0,
-                },
-                {
-                    'name': 'Iogurte natural',
-                    'quantity': '150g',
-                    'calories': 100,
-                    'protein_g': 8,
-                    'carbs_g': 12,
-                    'fat_g': 2,
-                },
+                {'name': 'Banana', 'quantity': '1 unidade',
+                 'calories': 90, 'protein_g': 1, 'carbs_g': 23, 'fat_g': 0},
+                {'name': 'Iogurte natural', 'quantity': '150g',
+                 'calories': 100, 'protein_g': 8, 'carbs_g': 12, 'fat_g': 2},
             ],
         },
         {
             'name': 'Ceia',
             'time_suggestion': '21:00',
             'foods': [
-                {
-                    'name': 'Queijo minas',
-                    'quantity': '50g',
-                    'calories': 130,
-                    'protein_g': 9,
-                    'carbs_g': 3,
-                    'fat_g': 9,
-                },
+                {'name': 'Queijo minas', 'quantity': '50g',
+                 'calories': 130, 'protein_g': 9, 'carbs_g': 3, 'fat_g': 9},
             ],
         },
     ],
-    'substitutions': [
-        {'food': 'Frango', 'alternatives': ['Atum', 'Tilápia']},
-    ],
+    'substitutions': [{'food': 'Frango', 'alternatives': ['Atum', 'Tilápia']}],
     'notes': 'Beba 2-3 litros de água por dia.',
     'explanation': {
         'calorie_calculation': 'TMB calculada via Mifflin-St Jeor...',
@@ -267,7 +207,6 @@ class TestAnamneseEndpoint:
         data = {
             'idade': 30, 'sexo': 'F', 'peso': 60.0, 'altura': 165.0,
             'nivel_atividade': 'light', 'objetivo': 'maintain',
-            # sem restricoes, food_preferences, allergies
         }
         response = client.post('/api/v1/anamnese', data, format='json')
         assert response.status_code == 201
@@ -369,10 +308,9 @@ class TestDietGenerate:
 
     @patch('nutrition.services.AIService.generate_diet')
     def test_gerar_dieta_usa_anamnese_mais_recente(self, mock_generate, auth_client, create_anamnese):
-        """Deve usar a anamnese mais recente, não a mais antiga."""
         client, user = auth_client
         create_anamnese(user=user, goal='lose')
-        create_anamnese(user=user, goal='gain')  # mais recente
+        create_anamnese(user=user, goal='gain')
 
         diet_plan = DietPlan.objects.create(
             user=user,
@@ -443,7 +381,6 @@ class TestDietGet:
             goal_description='Plano do usuário A',
         )
 
-        # Autentica como user_b
         refresh_b = RefreshToken.for_user(user_b)
         api_client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh_b.access_token}')
 
@@ -466,7 +403,6 @@ class TestDietGet:
         assert 'explanation' in response.data
         explanation = response.data['explanation']
         assert explanation is not None
-        # Verifica que os 5 campos obrigatórios estão presentes e preenchidos
         campos_obrigatorios = {
             'calorie_calculation', 'macro_distribution',
             'food_choices', 'meal_structure', 'goal_alignment',
@@ -501,7 +437,6 @@ class TestDietGet:
 
 @pytest.mark.django_db
 class TestDietJobStatus:
-    """Testa o endpoint de polling do status de geração de dieta."""
 
     def _make_job(self, user, status, anamnese=None, diet_plan=None, error=''):
         from nutrition.models import DietJob
@@ -656,6 +591,235 @@ class TestHealthCheck:
     def test_health_check_ok(self, api_client):
         response = api_client.get('/health/')
         assert response.status_code == 200
-        import json
         data = json.loads(response.content)
         assert data.get('status') == 'ok'
+
+
+# ---------------------------------------------------------------------------
+# Validação de limites (AnamneseSerializer) — peso, altura, meals_per_day, IMC
+# ---------------------------------------------------------------------------
+
+_VALID_ANAMNESE = {
+    'idade': 30,
+    'sexo': 'M',
+    'peso': 80,
+    'altura': 175,
+    'nivel_atividade': 'moderate',
+    'objetivo': 'lose',
+    'meals_per_day': 4,
+}
+
+
+@pytest.mark.django_db
+class TestAnamneseSerializerBounds:
+
+    def _post(self, auth_client, payload):
+        client, _ = auth_client
+        return client.post('/api/v1/anamnese', payload, format='json')
+
+    # peso
+    def test_peso_zero_retorna_400(self, auth_client):
+        assert self._post(auth_client, {**_VALID_ANAMNESE, 'peso': 0}).status_code == 400
+
+    def test_peso_negativo_retorna_400(self, auth_client):
+        assert self._post(auth_client, {**_VALID_ANAMNESE, 'peso': -5}).status_code == 400
+
+    def test_peso_abaixo_minimo_retorna_400(self, auth_client):
+        assert self._post(auth_client, {**_VALID_ANAMNESE, 'peso': 9}).status_code == 400
+
+    def test_peso_acima_maximo_retorna_400(self, auth_client):
+        assert self._post(auth_client, {**_VALID_ANAMNESE, 'peso': 501}).status_code == 400
+
+    def test_peso_no_limite_inferior_nao_500(self, auth_client):
+        r = self._post(auth_client, {**_VALID_ANAMNESE, 'peso': 10, 'altura': 120})
+        assert r.status_code in (200, 201, 400)
+
+    def test_peso_500kg_retorna_400(self, auth_client):
+        assert self._post(auth_client, {**_VALID_ANAMNESE, 'peso': 500}).status_code == 400
+
+    # altura
+    def test_altura_abaixo_minimo_retorna_400(self, auth_client):
+        assert self._post(auth_client, {**_VALID_ANAMNESE, 'altura': 49}).status_code == 400
+
+    def test_altura_acima_maximo_retorna_400(self, auth_client):
+        assert self._post(auth_client, {**_VALID_ANAMNESE, 'altura': 281}).status_code == 400
+
+    def test_altura_zero_retorna_400(self, auth_client):
+        assert self._post(auth_client, {**_VALID_ANAMNESE, 'altura': 0}).status_code == 400
+
+    # meals_per_day
+    def test_meals_per_day_zero_retorna_400(self, auth_client):
+        assert self._post(auth_client, {**_VALID_ANAMNESE, 'meals_per_day': 0}).status_code == 400
+
+    def test_meals_per_day_50_retorna_400(self, auth_client):
+        assert self._post(auth_client, {**_VALID_ANAMNESE, 'meals_per_day': 50}).status_code == 400
+
+    def test_meals_per_day_maximo_aceito(self, auth_client):
+        assert self._post(auth_client, {**_VALID_ANAMNESE, 'meals_per_day': 12}).status_code in (200, 201)
+
+    def test_meals_per_day_minimo_aceito(self, auth_client):
+        assert self._post(auth_client, {**_VALID_ANAMNESE, 'meals_per_day': 1}).status_code in (200, 201)
+
+    # IMC cruzado
+    def test_imc_implausivel_baixo_retorna_400(self, auth_client):
+        assert self._post(auth_client, {**_VALID_ANAMNESE, 'peso': 10, 'altura': 180}).status_code == 400
+
+    def test_imc_implausivel_alto_retorna_400(self, auth_client):
+        assert self._post(auth_client, {**_VALID_ANAMNESE, 'peso': 499, 'altura': 150}).status_code == 400
+
+    def test_imc_valido_aceito(self, auth_client):
+        assert self._post(auth_client, {**_VALID_ANAMNESE, 'peso': 80, 'altura': 175}).status_code in (200, 201)
+
+    def test_dados_completamente_validos_aceitos(self, auth_client):
+        assert self._post(auth_client, _VALID_ANAMNESE).status_code in (200, 201)
+
+
+# ---------------------------------------------------------------------------
+# Rate limiting
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+class TestRateLimiting:
+
+    @pytest.fixture
+    def user_with_anamnese(self, create_user):
+        user = create_user()
+        Anamnese.objects.create(
+            user=user, age=25, gender='M', weight_kg=70.0, height_cm=175.0,
+            activity_level='moderate', goal='lose', meals_per_day=3,
+        )
+        return user
+
+    @pytest.fixture(autouse=True)
+    def reset_throttle_cache(self):
+        from nutrition.models import DietJob
+        DietJob.objects.all().delete()
+        cache.clear()
+        yield
+        cache.clear()
+
+    def _make_diet_plan(self, user):
+        return DietPlan.objects.create(
+            user=user,
+            raw_response={
+                'goal_description': 'Teste',
+                'calories': 1800,
+                'macros': {'protein_g': 100, 'carbs_g': 200, 'fat_g': 50},
+                'meals': [],
+                'substitutions': [],
+                'notes': '',
+                'explanation': None,
+            },
+            total_calories=1800,
+            goal_description='Teste',
+        )
+
+    @override_settings(REST_FRAMEWORK={
+        'DEFAULT_AUTHENTICATION_CLASSES': (
+            'rest_framework_simplejwt.authentication.JWTAuthentication',
+        ),
+        'DEFAULT_PERMISSION_CLASSES': (
+            'rest_framework.permissions.IsAuthenticated',
+        ),
+        'DEFAULT_THROTTLE_CLASSES': [],
+        'DEFAULT_THROTTLE_RATES': {
+            'anon': '1000/hour', 'user': '1000/hour',
+            'diet_generate': '2/minute',
+            'login': '1000/hour', 'contact': '1000/hour', 'testimonial': '1000/day',
+        },
+    })
+    @patch('nutrition.services.AIService.generate_diet')
+    def test_rate_limit_bloqueia_apos_limite(self, mock_generate, api_client, user_with_anamnese):
+        user = user_with_anamnese
+        refresh = RefreshToken.for_user(user)
+        api_client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+        mock_generate.side_effect = lambda anamnese: self._make_diet_plan(anamnese.user)
+
+        r1 = api_client.post('/api/v1/diet/generate', format='json')
+        assert r1.status_code == 202
+        r2 = api_client.post('/api/v1/diet/generate', format='json')
+        assert r2.status_code == 202
+        r3 = api_client.post('/api/v1/diet/generate', format='json')
+        assert r3.status_code == 429
+
+    @override_settings(REST_FRAMEWORK={
+        'DEFAULT_AUTHENTICATION_CLASSES': (
+            'rest_framework_simplejwt.authentication.JWTAuthentication',
+        ),
+        'DEFAULT_PERMISSION_CLASSES': (
+            'rest_framework.permissions.IsAuthenticated',
+        ),
+        'DEFAULT_THROTTLE_CLASSES': [],
+        'DEFAULT_THROTTLE_RATES': {
+            'anon': '1000/hour', 'user': '1000/hour',
+            'diet_generate': '2/minute',
+            'login': '1000/hour', 'contact': '1000/hour', 'testimonial': '1000/day',
+        },
+    })
+    @patch('nutrition.services.AIService.generate_diet')
+    def test_rate_limit_resposta_429_tem_mensagem(self, mock_generate, api_client, user_with_anamnese):
+        user = user_with_anamnese
+        refresh = RefreshToken.for_user(user)
+        api_client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+        mock_generate.side_effect = lambda anamnese: self._make_diet_plan(anamnese.user)
+
+        api_client.post('/api/v1/diet/generate', format='json')
+        api_client.post('/api/v1/diet/generate', format='json')
+        r = api_client.post('/api/v1/diet/generate', format='json')
+
+        assert r.status_code == 429
+        assert 'detail' in r.data
+
+    @override_settings(REST_FRAMEWORK={
+        'DEFAULT_AUTHENTICATION_CLASSES': (
+            'rest_framework_simplejwt.authentication.JWTAuthentication',
+        ),
+        'DEFAULT_PERMISSION_CLASSES': (
+            'rest_framework.permissions.IsAuthenticated',
+        ),
+        'DEFAULT_THROTTLE_CLASSES': [],
+        'DEFAULT_THROTTLE_RATES': {
+            'anon': '1000/hour', 'user': '1000/hour',
+            'diet_generate': '2/minute',
+            'login': '1000/hour', 'contact': '1000/hour', 'testimonial': '1000/day',
+        },
+    })
+    @patch('nutrition.services.AIService.generate_diet')
+    def test_rate_limit_por_usuario_nao_afeta_outro(self, mock_generate, api_client, create_user):
+        user_a = create_user(email='a@rate.com')
+        Anamnese.objects.create(
+            user=user_a, age=25, gender='M', weight_kg=70.0, height_cm=175.0,
+            activity_level='moderate', goal='lose', meals_per_day=3,
+        )
+        user_b = create_user(email='b@rate.com')
+        Anamnese.objects.create(
+            user=user_b, age=30, gender='F', weight_kg=60.0, height_cm=165.0,
+            activity_level='light', goal='maintain', meals_per_day=4,
+        )
+
+        refresh_a = RefreshToken.for_user(user_a)
+        api_client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh_a.access_token}')
+        mock_generate.side_effect = lambda anamnese: self._make_diet_plan(anamnese.user)
+        api_client.post('/api/v1/diet/generate', format='json')
+        api_client.post('/api/v1/diet/generate', format='json')
+        r_a = api_client.post('/api/v1/diet/generate', format='json')
+        assert r_a.status_code == 429
+
+        refresh_b = RefreshToken.for_user(user_b)
+        api_client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh_b.access_token}')
+        r_b = api_client.post('/api/v1/diet/generate', format='json')
+        assert r_b.status_code == 202
+
+    def test_rate_limit_outros_endpoints_nao_afetados(self, auth_client):
+        client, _ = auth_client
+        for _ in range(5):
+            r = client.get('/api/v1/user/profile')
+            assert r.status_code == 200
+
+    def test_cache_dev_nao_usa_redis(self):
+        actual_cache = getattr(cache, '_cache', None) or cache
+        actual_class = type(actual_cache).__name__
+        redis_indicators = ('Redis', 'Memcached', 'Pylibmc')
+        assert not any(r in actual_class for r in redis_indicators), (
+            f'Cache de produção ({actual_class}) detectado em testes.'
+        )

@@ -20,7 +20,7 @@ services:
     plan: free            # troque por "starter" para produção real
 
     buildCommand: "./build.sh"
-    startCommand: "gunicorn mynutri.wsgi:application --workers 2 --timeout 120 --log-file -"
+    startCommand: "gunicorn mynutri.wsgi:application --workers 4 --timeout 300 --log-file -"
 
     # Variáveis de ambiente — os valores com sync: false devem ser preenchidos
     # manualmente no painel do Render (Environment > Add Environment Variable)

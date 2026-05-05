@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.db.models import Index
 
 
 class Anamnese(models.Model):
@@ -34,6 +35,7 @@ class Anamnese(models.Model):
         on_delete=models.CASCADE,
         related_name='anamneses',
         verbose_name='Usuário',
+        db_index=True,
     )
 
     # Dados físicos básicos (conforme DATABASE.md e API.md)
@@ -99,6 +101,7 @@ class DietPlan(models.Model):
         on_delete=models.CASCADE,
         related_name='diet_plans',
         verbose_name='Usuário',
+        db_index=True,
     )
     anamnese = models.ForeignKey(
         Anamnese,
@@ -107,6 +110,7 @@ class DietPlan(models.Model):
         blank=True,
         related_name='diet_plans',
         verbose_name='Anamnese de origem',
+        db_index=True,
     )
 
     # Resposta bruta da IA em JSON (conforme estrutura definida em PROMPTS.md)
@@ -167,6 +171,7 @@ class DietJob(models.Model):
         on_delete=models.CASCADE,
         related_name='diet_jobs',
         verbose_name='Usuário',
+        db_index=True,
     )
     anamnese = models.ForeignKey(
         Anamnese,
@@ -175,6 +180,7 @@ class DietJob(models.Model):
         blank=True,
         related_name='diet_jobs',
         verbose_name='Anamnese de origem',
+        db_index=True,
     )
     status = models.CharField(
         'Status',
@@ -216,6 +222,7 @@ class Meal(models.Model):
         on_delete=models.CASCADE,
         related_name='meals',
         verbose_name='Plano Alimentar',
+        db_index=True,
     )
 
     # Campos mapeados da estrutura JSON do PROMPTS.md
@@ -261,18 +268,21 @@ class MealRegenerationLog(models.Model):
         on_delete=models.CASCADE,
         related_name='regeneration_logs',
         verbose_name='Plano Alimentar',
+        db_index=True,
     )
     meal = models.ForeignKey(
         Meal,
         on_delete=models.CASCADE,
         related_name='regeneration_logs',
         verbose_name='Refeição',
+        db_index=True,
     )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='meal_regeneration_logs',
         verbose_name='Usuário',
+        db_index=True,
     )
     reason = models.TextField('Motivo informado', blank=True)
 
@@ -289,6 +299,9 @@ class MealRegenerationLog(models.Model):
         verbose_name = 'Log de Regeneração'
         verbose_name_plural = 'Logs de Regeneração'
         ordering = ['-created_at']
+        indexes = [
+            Index(fields=['diet_plan', 'created_at', 'is_undone'], name='regen_log_ratelimit_idx'),
+        ]
 
     def __str__(self):
         return (

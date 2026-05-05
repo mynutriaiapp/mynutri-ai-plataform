@@ -8,6 +8,7 @@ Usado pelo AIService para calcular macros deterministicamente, sem delegar aritm
 import logging
 import re
 import unicodedata
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
@@ -294,6 +295,60 @@ _DB_NORMALIZED: dict[str, tuple[float, float, float, float]] = {
 }
 
 
+@lru_cache(maxsize=512)
+def _lookup_macros_per_100g(food_name: str) -> tuple[float, float, float, float, str]:
+    """
+    Retorna (cal, prot, carbs, fat, source) por 100g para um nome de alimento.
+    Cacheado por nome — a busca fuzzy O(n) é executada só uma vez por alimento único.
+    """
+    normalized = _normalize(food_name)
+
+    # 1. Match exato
+    if normalized in _DB_NORMALIZED:
+        return (*_DB_NORMALIZED[normalized], 'exact')
+
+    # 2. Score por sobreposição de palavras
+    food_words = set(normalized.split())
+    best_score = 0.0
+    best_key   = None
+
+    for key in _DB_NORMALIZED:
+        key_words = set(key.split())
+        overlap   = len(food_words & key_words)
+        if overlap == 0:
+            continue
+        score = overlap / max(len(food_words), len(key_words))
+        if score > best_score:
+            best_score = score
+            best_key   = key
+
+    if best_score >= 0.40:
+        logger.debug(
+            'Alimento "%s" → match no banco: "%s" (score=%.2f)',
+            food_name, best_key, best_score,
+        )
+        return (*_DB_NORMALIZED[best_key], 'fuzzy')
+
+    # 3. Fallback por categoria
+    norm_original = _strip_accents(food_name.lower())
+    for keywords, macros in _CATEGORY_FALLBACKS:
+        if any(kw in norm_original for kw in keywords):
+            logger.info(
+                '[DB_GAP] Alimento "%s" não encontrado — fallback de categoria (palavra-chave: %s).',
+                food_name,
+                next(kw for kw in keywords if kw in norm_original),
+            )
+            return (*macros, 'category')
+
+    # 4. Fallback genérico
+    logger.warning(
+        '[DB_GAP] Alimento "%s" sem correspondência no banco nutricional. '
+        'Usando fallback genérico (150 kcal/100g). Considere adicionar ao nutrition_db.py.',
+        food_name,
+    )
+    return (150, 8.0, 20.0, 4.0, 'generic')
+
+
 def lookup_food_nutrition(food_name: str, quantity_g: float) -> dict:
     """
     Retorna calorias e macros para um alimento dado peso em gramas.
@@ -313,60 +368,9 @@ def lookup_food_nutrition(food_name: str, quantity_g: float) -> dict:
         result['_source'] = 'invalid'
         return result
 
-    normalized = _normalize(food_name)
-
-    # 1. Match exato (normalização simétrica: input e chaves do DB tratados igual)
-    if normalized in _DB_NORMALIZED:
-        result = _scale(*_DB_NORMALIZED[normalized], quantity_g)
-        result['_source'] = 'exact'
-        return result
-
-    # 2. Score por sobreposição de palavras
-    food_words = set(normalized.split())
-    best_score = 0.0
-    best_key   = None
-
-    for key in _DB_NORMALIZED:
-        key_words = set(key.split())
-        overlap   = len(food_words & key_words)
-        if overlap == 0:
-            continue
-        # Penaliza diferença de especificidade: prefere entradas com palavras similares
-        score = overlap / max(len(food_words), len(key_words))
-        if score > best_score:
-            best_score = score
-            best_key   = key
-
-    if best_score >= 0.40:
-        logger.debug(
-            'Alimento "%s" → match no banco: "%s" (score=%.2f)',
-            food_name, best_key, best_score,
-        )
-        result = _scale(*_DB_NORMALIZED[best_key], quantity_g)
-        result['_source'] = 'fuzzy'
-        return result
-
-    # 3. Fallback por categoria
-    norm_original = _strip_accents(food_name.lower())
-    for keywords, macros in _CATEGORY_FALLBACKS:
-        if any(kw in norm_original for kw in keywords):
-            logger.info(
-                '[DB_GAP] Alimento "%s" não encontrado — fallback de categoria (palavra-chave: %s).',
-                food_name,
-                next(kw for kw in keywords if kw in norm_original),
-            )
-            result = _scale(*macros, quantity_g)
-            result['_source'] = 'category'
-            return result
-
-    # 4. Fallback genérico — indica lacuna real no banco nutricional
-    logger.warning(
-        '[DB_GAP] Alimento "%s" sem correspondência no banco nutricional. '
-        'Usando fallback genérico (150 kcal/100g). Considere adicionar ao nutrition_db.py.',
-        food_name,
-    )
-    result = _scale(150, 8.0, 20.0, 4.0, quantity_g)
-    result['_source'] = 'generic'
+    cal, prot, carbs, fat, source = _lookup_macros_per_100g(food_name)
+    result = _scale(cal, prot, carbs, fat, quantity_g)
+    result['_source'] = source
     return result
 
 

@@ -211,7 +211,8 @@ class TestPromptStructureAndFlow:
             service.generate_diet(anamnese_obj)
 
         temp = captured[0].get('temperature', 1.0)
-        assert 0.4 <= temp <= 0.7, f'Temperatura esperada entre 0.4 e 0.7, recebida: {temp}'
+        # Variedade garantida pelo prompt; temperatura moderada reduz NutritionDataGap
+        assert 0.4 <= temp <= 0.7, f'Temperatura esperada entre 0.4 e 0.7 (variedade via prompt, não via temperatura), recebida: {temp}'
 
     def test_passo1_contem_target_calories(self, anamnese_obj):
         """O prompt do Passo 1 deve conter o alvo calórico calculado pelo backend."""
