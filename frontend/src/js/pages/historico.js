@@ -24,7 +24,8 @@ async function loadHistory() {
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-    const plans = await res.json();
+    const data  = await res.json();
+    const plans = data.results ?? data;   // suporte ao formato paginado e ao legado
     hide('stateLoading');
 
     if (!plans.length) {
@@ -32,7 +33,7 @@ async function loadHistory() {
       return;
     }
 
-    const count = plans.length;
+    const count = data.count ?? plans.length;
     document.getElementById('countText').textContent = `${count} ${count === 1 ? 'dieta gerada' : 'dietas geradas'}`;
 
     const list = document.getElementById('historyList');

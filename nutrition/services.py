@@ -12,8 +12,10 @@ import json
 import logging
 import os
 import re
+import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .models import Anamnese, DietPlan, Meal
 import unicodedata
@@ -391,8 +393,10 @@ class AIService:
         system_prompt: str,
         temperature: float = 0.3,
         json_mode: bool = True,
+        max_retries: int = 3,
+        max_tokens: int | None = None,
     ) -> dict:
-        """Realiza chamada à API de IA (formato OpenAI Chat Completions)."""
+        """Realiza chamada à API de IA com retry exponencial em erros transitórios."""
         if not self.api_key or not self.api_url:
             raise PermanentAIError('AI_API_KEY e AI_API_URL devem estar configurados no .env')
 
@@ -404,6 +408,8 @@ class AIService:
             ],
             'temperature': temperature,
         }
+        if max_tokens is not None:
+            body['max_tokens'] = max_tokens
         if json_mode:
             body['response_format'] = {'type': 'json_object'}
 
@@ -418,8 +424,27 @@ class AIService:
             method='POST',
         )
 
-        with urllib.request.urlopen(req, timeout=120) as response:
-            return json.loads(response.read().decode('utf-8'))
+        last_exc: Exception | None = None
+        for attempt in range(max_retries):
+            try:
+                with urllib.request.urlopen(req, timeout=120) as response:
+                    return json.loads(response.read().decode('utf-8'))
+            except urllib.error.HTTPError as e:
+                # 429 Too Many Requests e 5xx são transitórios; 4xx são permanentes
+                if e.code == 429 or e.code >= 500:
+                    last_exc = e
+                    wait = 2 ** attempt
+                    logger.warning('API HTTP %s na tentativa %d/%d — aguardando %ds', e.code, attempt + 1, max_retries, wait)
+                    time.sleep(wait)
+                else:
+                    raise
+            except (urllib.error.URLError, TimeoutError, OSError) as e:
+                last_exc = e
+                wait = 2 ** attempt
+                logger.warning('Erro de rede na tentativa %d/%d — aguardando %ds: %s', attempt + 1, max_retries, wait, e)
+                time.sleep(wait)
+
+        raise TransientAIError(f'API da IA indisponível após {max_retries} tentativas: {last_exc}')
 
     def _parse_response(self, api_response: dict) -> dict:
         """Extrai e parseia o JSON gerado pela IA."""
@@ -568,15 +593,17 @@ class AIService:
                     applied_scale = scale
 
                 new_qty = max(10, round(old_qty * applied_scale))
-                food['quantity_g']   = new_qty
-                food['quantity_text'] = f'{new_qty}g'
-                food['quantity']      = f'{new_qty}g'
+                food['quantity_g'] = new_qty
 
                 nutrition = lookup_food_nutrition(name, new_qty)
                 food['calories']  = nutrition['calories']
                 food['protein_g'] = nutrition['protein_g']
                 food['carbs_g']   = nutrition['carbs_g']
                 food['fat_g']     = nutrition['fat_g']
+
+                measure = _household_measure(name, new_qty)
+                food['quantity_text'] = f'{new_qty}g'
+                food['quantity']      = f'{new_qty}g ({measure})' if measure else f'{new_qty}g'
 
         return self._recalculate_totals(diet_data)
 
@@ -845,10 +872,14 @@ class AIService:
         diet_data: dict,
         anamnese: Anamnese,
         target_calories: int,
-    ) -> str | None:
+    ) -> dict:
         """
         Gera dicas práticas e personalizadas com base no perfil e plano reais.
-        Substitui o campo 'notes' genérico retornado pelo Step 1.
+
+        Retorna um dict com:
+          - 'notes': string com dicas gerais formatadas em bullet points (ou None)
+          - 'meal_notes': dict {int(index): str} com dicas por refeição (ou {})
+
         Falha silenciosamente — o plano é válido mesmo sem dicas.
         """
         prompt = build_notes_prompt(diet_data, anamnese, target_calories)
@@ -858,17 +889,45 @@ class AIService:
                 system_prompt=SYSTEM_PROMPT_NOTES,
                 temperature=0.7,
                 json_mode=True,
+                max_tokens=800,  # 3–5 dicas gerais + meal_notes por refeição
             )
             result = self._parse_response(raw)
+
+            # Dicas gerais
             tips = result.get('tips')
-            if not tips or not isinstance(tips, list):
-                logger.warning('Dicas personalizadas: formato inesperado. Ignorando.')
-                return None
-            cleaned = [t.strip() for t in tips if isinstance(t, str) and t.strip()]
-            return '\n'.join(f'• {t}' for t in cleaned) if cleaned else None
+            notes_str = None
+            if tips and isinstance(tips, list):
+                cleaned = [t.strip() for t in tips if isinstance(t, str) and t.strip()]
+                notes_str = '\n'.join(f'• {t}' for t in cleaned) if cleaned else None
+
+            # Dicas por refeição — o modelo usa o nome da refeição como chave.
+            # Converte para índice inteiro mapeando pelo nome real das refeições,
+            # com fallback para chaves numéricas (0-based e 1-based) por compatibilidade.
+            meal_notes_raw = result.get('meal_notes', {})
+            meal_notes: dict[int, str] = {}
+            if isinstance(meal_notes_raw, dict):
+                meals = diet_data.get('meals', [])
+                meal_name_to_index = {
+                    m.get('name', ''): i for i, m in enumerate(meals)
+                }
+                for k, v in meal_notes_raw.items():
+                    if not (isinstance(v, str) and v.strip()):
+                        continue
+                    if k in meal_name_to_index:
+                        meal_notes[meal_name_to_index[k]] = v.strip()
+                    elif k.isdigit():
+                        idx = int(k)
+                        # aceita tanto 0-based quanto 1-based
+                        if 0 <= idx < len(meals):
+                            meal_notes[idx] = v.strip()
+                        elif 1 <= idx <= len(meals):
+                            meal_notes[idx - 1] = v.strip()
+
+            return {'notes': notes_str, 'meal_notes': meal_notes}
+
         except Exception as exc:
             logger.warning('Falha ao gerar dicas personalizadas (não crítico): %s', exc)
-            return None
+            return {'notes': None, 'meal_notes': {}}
 
     # ──────────────────────────────────────────────────────────────────────────
     #  PASSO 2 — EXPLICAÇÃO (chamada separada, falha silenciosamente)
@@ -893,6 +952,7 @@ class AIService:
                 system_prompt=SYSTEM_PROMPT_EXPLANATION,
                 temperature=0.7,
                 json_mode=True,
+                max_tokens=1200,  # 5 seções × ~3 parágrafos × ~80 tokens cada
             )
             explanation = self._parse_response(raw)
             # Valida que os 5 campos obrigatórios existem
@@ -915,11 +975,11 @@ class AIService:
         Gera e persiste um DietPlan completo.
 
         Fluxo:
-          1. Backend calcula alvo calórico (Mifflin-St Jeor)
-          2. LLM Passo 1 (temp=0.3): seleciona alimentos + quantidades
-          3. Backend: enriquece com macros do nutrition_db (determinístico)
-          4. Backend: ajusta porções se divergência > 10%
-          5. LLM Passo 2 (temp=0.7): gera explicação de transparência
+          1. Backend calcula alvo calórico e macros (Mifflin-St Jeor) — determinístico
+          2. LLM Passo 1 (temp=0.55): seleciona alimentos + quantidades
+          3. Backend: enriquece com macros do nutrition_db, ajusta porções — determinístico
+          4. Backend: gera substituições — determinístico
+          5. LLM Passos 2+3 (temp=0.7) em paralelo: notas e explicação — simultâneos
           6. Persiste DietPlan + Meals no banco
         """
         tmb, tdee, target_calories = calculate_calories(anamnese)
@@ -938,6 +998,7 @@ class AIService:
                 system_prompt=SYSTEM_PROMPT_FOODS,
                 temperature=0.55,
                 json_mode=True,
+                max_tokens=2500,  # ~6 refeições × ~5 alimentos × ~80 tokens cada + overhead JSON
             )
         except urllib.error.HTTPError as e:
             logger.error('Erro HTTP na chamada à IA (Passo 1): %s', e)
@@ -974,13 +1035,7 @@ class AIService:
         self._check_protein_adequacy(diet_data, anamnese, target_calories)
         self._validate_macro_ratios(diet_data, anamnese, target_calories)
 
-        # ── Dicas personalizadas (falha silenciosa) ───────────────────────────
-        logger.info('Gerando dicas personalizadas para usuário %s...', anamnese.user_id)
-        notes = self._generate_notes(diet_data, anamnese, target_calories)
-        if notes:
-            diet_data['notes'] = notes
-
-        # ── Substituições inteligentes (determinístico — backend) ────────────
+        # ── Substituições inteligentes (determinístico — backend, sem IA) ──────
         allergens_list = _parse_allergens(anamnese.allergies or '')
         diet_data['substitutions'] = generate_meal_substitutions(
             diet_data.get('meals', []), allergens_list
@@ -990,9 +1045,38 @@ class AIService:
             len(diet_data['substitutions']), anamnese.user_id,
         )
 
-        # ── Passo 2: explicação (falha silenciosa) ────────────────────────────
-        logger.info('Passo 2 — gerando explicação de transparência...')
-        explanation = self._generate_explanation(diet_data, anamnese, tmb, tdee, target_calories)
+        # ── Passos 2 e 3 em paralelo (independentes entre si) ────────────────
+        # Notas e explicação dependem apenas do diet_data do Passo 1 — não há
+        # dependência entre elas, então rodam simultaneamente em threads separadas.
+        logger.info('Passos 2 e 3 — gerando notas e explicação em paralelo (usuário %s)...', anamnese.user_id)
+        notes: dict | None = None
+        explanation: dict | None = None
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            fut_notes = executor.submit(
+                self._generate_notes, diet_data, anamnese, target_calories
+            )
+            fut_explanation = executor.submit(
+                self._generate_explanation, diet_data, anamnese, tmb, tdee, target_calories
+            )
+            for fut in as_completed([fut_notes, fut_explanation]):
+                try:
+                    result = fut.result()
+                    if fut is fut_notes:
+                        notes = result
+                    else:
+                        explanation = result
+                except Exception as exc:
+                    logger.warning('Falha em chamada paralela à IA (não crítico): %s', exc)
+
+        if isinstance(notes, dict):
+            if notes.get('notes'):
+                diet_data['notes'] = notes['notes']
+            meal_notes_map = notes.get('meal_notes', {})
+            for i, meal in enumerate(diet_data.get('meals', [])):
+                note = meal_notes_map.get(i)
+                if note:
+                    meal['meal_notes'] = note
         diet_data['explanation'] = explanation
 
         # ── Persiste DietPlan ─────────────────────────────────────────────────

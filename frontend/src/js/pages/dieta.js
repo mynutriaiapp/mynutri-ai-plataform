@@ -861,14 +861,39 @@ overlayExplain.addEventListener('touchmove', e => {
 // ════════════════════════════════
 //  RENDER PAGE
 // ════════════════════════════════
-function showError(msg, ctaHref, ctaLabel) {
+
+// Esconde o botão de cancelar geração
+function hideCancelButton() {
+  const btn = document.getElementById('btn-cancel-generation');
+  if (btn) btn.style.display = 'none';
+}
+
+// Exibe o botão de cancelar geração (mostrado durante generate=1)
+function showCancelButton() {
+  const btn = document.getElementById('btn-cancel-generation');
+  if (btn) btn.style.display = '';
+}
+
+/**
+ * @param {string} msg
+ * @param {string|null} ctaHref  - href do link secundário (ex: '/questionario/')
+ * @param {string|null} ctaLabel - label do link secundário
+ * @param {boolean} showRetry    - exibe botão "Tentar novamente" (para erros de geração)
+ */
+function showError(msg, ctaHref, ctaLabel, showRetry = false) {
+  stopLoadingTips();
+  hideCancelButton();
   document.getElementById('state-loading').style.display = 'none';
   document.getElementById('state-error').style.display   = 'flex';
   document.getElementById('error-msg').textContent = msg;
+
+  const retryBtn = document.getElementById('btn-retry-generation');
+  if (retryBtn) retryBtn.style.display = showRetry ? '' : 'none';
+
   const cta = document.getElementById('error-cta');
   if (cta && ctaHref) {
-    cta.href        = ctaHref;
-    cta.textContent = ctaLabel || 'Continuar';
+    cta.href          = ctaHref;
+    cta.textContent   = ctaLabel || 'Continuar';
     cta.style.display = '';
   } else if (cta) {
     cta.style.display = 'none';
@@ -1194,69 +1219,84 @@ function pollJobStatus(jobId) {
   });
 }
 
+async function generateDiet() {
+  const jsonHeaders = { 'Content-Type': 'application/json' };
+
+  // Volta para o estado de loading
+  document.getElementById('state-error').style.display   = 'none';
+  document.getElementById('state-loading').style.display = 'flex';
+  document.getElementById('loading-msg').textContent     = 'Iniciando geração...';
+  document.getElementById('loading-subtitle').textContent =
+    'A IA está preparando seu plano personalizado. Não feche esta página.';
+
+  showCancelButton();
+  startLoadingTips();
+
+  let jobId;
+  try {
+    const dr = await apiFetch(`${API_BASE}/diet/generate`, { method: 'POST', headers: jsonHeaders, body: '{}' });
+    if (!dr.ok) {
+      const e = await dr.json().catch(() => ({}));
+      showError(e.error || 'Erro ao iniciar geração. Tente novamente.', '/questionario/', 'Refazer questionário', true);
+      return;
+    }
+    const jobData = await dr.json();
+    jobId = jobData.job_id;
+
+    // Modo síncrono (dev sem Redis): job já está done, busca direto
+    if (jobData.status === 'done' && jobData.diet_plan_id) {
+      hideCancelButton();
+      stopLoadingTips();
+      const planRes = await apiFetch(`${API_BASE}/diet/${jobData.diet_plan_id}`);
+      renderDiet(await planRes.json());
+      history.replaceState(null, '', 'dieta.html');
+      return;
+    }
+
+  } catch (err) {
+    console.error(err);
+    showError('Erro de conexão ao iniciar geração. Tente novamente.', '/questionario/', 'Refazer questionário', true);
+    return;
+  }
+
+  // Polling assíncrono (prod com Redis)
+  try {
+    const diet = await pollJobStatus(jobId);
+    hideCancelButton();
+    renderDiet(diet);
+    history.replaceState(null, '', 'dieta.html');
+  } catch (err) {
+    console.error(err);
+    showError(err.message || 'Erro ao gerar dieta. Tente novamente.', '/questionario/', 'Refazer questionário', true);
+  }
+}
+
 async function loadDiet() {
   const generate = new URLSearchParams(window.location.search).get('generate');
 
   if (generate === '1') {
     const jsonHeaders = { 'Content-Type': 'application/json' };
 
-    // 1. Envia anamnese pendente se houver
+    // 1. Envia anamnese pendente se houver (fluxo de login intermediário)
     const pending = sessionStorage.getItem('anamneseData');
     if (pending) {
       document.getElementById('loading-msg').textContent = 'Enviando questionário...';
       try {
-        const ar = await apiFetch(`${API_BASE}/anamnese`, { method:'POST', headers: jsonHeaders, body:pending });
+        const ar = await apiFetch(`${API_BASE}/anamnese`, { method: 'POST', headers: jsonHeaders, body: pending });
         if (!ar.ok) {
           const e = await ar.json().catch(() => ({}));
-          showError(Object.values(e).flat().join(' ') || 'Erro ao salvar questionário.');
+          showError(Object.values(e).flat().join(' ') || 'Erro ao salvar questionário.', '/questionario/', 'Voltar ao questionário');
           return;
         }
         sessionStorage.removeItem('anamneseData');
-      } catch { showError('Erro de conexão ao salvar questionário.'); return; }
-    }
-
-    // 2. Inicia geração assíncrona
-    document.querySelector('.state-subtitle').textContent =
-      'A IA está preparando seu plano personalizado. Não feche esta página.';
-    startLoadingTips();
-
-    let jobId;
-    try {
-      const dr = await apiFetch(`${API_BASE}/diet/generate`, { method:'POST', headers: jsonHeaders, body:'{}' });
-      if (!dr.ok) {
-        stopLoadingTips();
-        const e = await dr.json().catch(() => ({}));
-        showError(e.error || 'Erro ao iniciar geração. Tente novamente.');
+      } catch {
+        showError('Erro de conexão ao salvar questionário.', '/questionario/', 'Voltar ao questionário');
         return;
       }
-      const jobData = await dr.json();
-      jobId = jobData.job_id;
-
-      // Modo síncrono (dev sem Redis): job já está done, busca direto
-      if (jobData.status === 'done' && jobData.diet_plan_id) {
-        stopLoadingTips();
-        const planRes = await apiFetch(`${API_BASE}/diet/${jobData.diet_plan_id}`);
-        renderDiet(await planRes.json());
-        history.replaceState(null, '', 'dieta.html');
-        return;
-      }
-
-    } catch (err) {
-      stopLoadingTips();
-      console.error(err);
-      showError('Erro de conexão ao iniciar geração. Tente novamente.');
-      return;
     }
 
-    // 3. Polling assíncrono (prod com Redis)
-    try {
-      const diet = await pollJobStatus(jobId);
-      renderDiet(diet);
-      history.replaceState(null, '', 'dieta.html');
-    } catch (err) {
-      console.error(err);
-      showError(err.message || 'Erro ao gerar dieta. Tente novamente.');
-    }
+    // 2. Inicia geração
+    await generateDiet();
 
   } else {
     await fetchExistingDiet();
@@ -1318,6 +1358,17 @@ document.getElementById('btn-download-pdf').addEventListener('click', async () =
 document.getElementById('chat-dock-toggle').addEventListener('click', () => {
   const panel = document.getElementById('chat-dock-panel');
   panel.classList.contains('open') ? closeChatDock() : openChatDock();
+});
+
+// ════════════════════════════════
+//  BOTÕES DE LOADING / ERRO
+// ════════════════════════════════
+document.getElementById('btn-cancel-generation').addEventListener('click', () => {
+  window.location.href = '/questionario/';
+});
+
+document.getElementById('btn-retry-generation').addEventListener('click', () => {
+  generateDiet();
 });
 
 loadDiet();

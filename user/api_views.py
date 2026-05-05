@@ -446,3 +446,47 @@ class ProfileAPIView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         serializer.save()
         return Response(UserProfileSerializer(request.user).data, status=status.HTTP_200_OK)
+
+
+class ChangePasswordAPIView(APIView):
+    """
+    POST /api/v1/user/change-password
+    Altera a senha do usuário autenticado.
+    Body: { current_password, new_password }
+    Requer: Authorization: Bearer <token>
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        current_password = request.data.get('current_password', '')
+        new_password = request.data.get('new_password', '')
+
+        if not current_password or not new_password:
+            return Response(
+                {'error': 'current_password e new_password são obrigatórios.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not request.user.check_password(current_password):
+            return Response(
+                {'error': 'Senha atual incorreta.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(new_password) < 8:
+            return Response(
+                {'error': 'A nova senha deve ter pelo menos 8 caracteres.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if current_password == new_password:
+            return Response(
+                {'error': 'A nova senha deve ser diferente da senha atual.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        request.user.set_password(new_password)
+        request.user.save(update_fields=['password'])
+        logger.info('Password changed — user_id=%d', request.user.id)
+
+        return Response({'message': 'Senha alterada com sucesso.'}, status=status.HTTP_200_OK)

@@ -56,7 +56,15 @@
       "Bash(findstr :8000)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://127.0.0.1:8000/api/v1/diet/generate -X POST -H \"Content-Type: application/json\" -d '{}')",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://127.0.0.1:8000/dieta/)",
-      "Bash(curl -s http://127.0.0.1:8000/static/src/js/pages/dieta.js)"
+      "Bash(curl -s http://127.0.0.1:8000/static/src/js/pages/dieta.js)",
+      "Bash(python manage.py makemigrations nutrition)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\gabri\\\\OneDrive\\\\Área de Trabalho\\\\mynutri-ai-plataform\" -Recurse -File)",
+      "Bash(Select-Object FullName)",
+      "Bash(grep -v \"^[[:space:]]*//\")",
+      "Bash(python manage.py shell -c ' *)",
+      "Bash(curl -s http://127.0.0.1:8000/dieta/)",
+      "Bash(python -m pytest nutrition/test_services.py -x -q)",
+      "Bash(Remove-Item \"c:\\\\Users\\\\gabri\\\\OneDrive\\\\Área de Trabalho\\\\mynutri-ai-plataform\\\\nutrition\\\\prompts.py\" -Force)"
     ],
     "additionalDirectories": [
       "\\tmp",
