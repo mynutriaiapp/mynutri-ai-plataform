@@ -1,5 +1,5 @@
 from django.urls import path
-from .api_views import (
+from .views import (
     RegisterAPIView, ProfileAPIView, EmailTokenObtainPairView,
     ContactAPIView, GoogleAuthAPIView, GoogleOAuthCallbackView, TestimonialAPIView,
     LogoutAPIView, CookieTokenRefreshView, ChangePasswordAPIView,
