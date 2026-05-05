@@ -1,6 +1,6 @@
 /* Estilos locais para auth.html */
 body {
-  background: url('/static/src/assets/auth-bg.png') center/cover no-repeat fixed;
+  background: url('/static/src/assets/auth-bg.webp') center/cover no-repeat fixed;
   min-height: 100vh;
   display: flex;
   flex-direction: column;

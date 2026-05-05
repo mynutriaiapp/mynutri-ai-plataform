@@ -598,7 +598,7 @@ html.dark .theme-toggle .moon-icon {
   align-items: center;
   padding-top: var(--header-h);
   overflow: hidden;
-  background: url('../assets/hero-bg-nutri.png') center/cover no-repeat fixed;
+  background: url('../assets/hero-bg-nutri.webp') center/cover no-repeat fixed;
   transition: background-color var(--duration) ease;
 }
 
