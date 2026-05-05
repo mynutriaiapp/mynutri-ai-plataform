@@ -10,13 +10,17 @@ O **MyNutri AI** permite que usuários respondam um questionário nutricional e,
 
 ## 🚀 Funcionalidades
 
-- 📋 Questionário nutricional em múltiplos steps com validação
-- 🔐 Autenticação completa via **JWT** (cadastro + login + refresh)
+- 📋 Questionário nutricional em múltiplos steps com validação e pré-preenchimento
+- 🔐 Autenticação completa via **JWT** (cadastro + login + refresh + logout)
 - 🔑 Login com **Google OAuth**
 - 🤖 Geração **assíncrona** de dieta com IA (polling via job_id)
-- 🎯 Planos alimentares personalizados com calorias por refeição
+- 🎯 Planos alimentares personalizados com calorias e macros por refeição
+- 🔄 Regeneração pontual de refeições com suporte a desfazer
 - 📊 Histórico completo de dietas do usuário
 - 📄 Exportação do plano alimentar em **PDF**
+- 🌙 **Dark mode** com persistência e detecção de preferência do sistema
+- 💬 Sistema de depoimentos na landing page
+- 🔑 Troca de senha autenticada
 - 📧 Formulário de contato com envio de e-mail
 - 📱 Interface moderna, responsiva e mobile-first
 
@@ -28,7 +32,8 @@ O **MyNutri AI** permite que usuários respondam um questionário nutricional e,
 
 - **Python 3.10+** + **Django 6.x**
 - **Django REST Framework** — API REST
-- **SimpleJWT** — autenticação via Bearer Token
+- **SimpleJWT** — autenticação via Bearer Token + cookies HttpOnly
+- **Celery** — geração assíncrona de dieta (fallback síncrono em dev)
 - **SQLite** (dev) / **PostgreSQL** (prod)
 - **django-cors-headers** — CORS configurado
 
@@ -36,6 +41,7 @@ O **MyNutri AI** permite que usuários respondam um questionário nutricional e,
 
 - **HTML5** + **CSS3** + **JavaScript** (vanilla)
 - Sem frameworks front-end — SPA manual com fetch API
+- Dark mode via CSS variables + `html.dark`
 
 ### Inteligência Artificial
 
@@ -49,7 +55,7 @@ O **MyNutri AI** permite que usuários respondam um questionário nutricional e,
 mynutri-ai-plataform/
 │
 ├── mynutri/            # Configurações do projeto Django (settings, urls, wsgi)
-├── user/               # App de autenticação e perfil do usuário
+├── user/               # App de autenticação, perfil e depoimentos
 ├── nutrition/          # App de anamnese, geração e exibição de dieta
 │
 ├── frontend/
@@ -139,18 +145,27 @@ Acesse em `http://127.0.0.1:8000/`
 | `POST` | `/api/v1/auth/login` | Pública | Login por email/senha |
 | `POST` | `/api/v1/auth/google` | Pública | Login/cadastro via Google OAuth |
 | `POST` | `/api/v1/auth/token/refresh` | Pública | Renova access token |
+| `POST` | `/api/v1/auth/logout` | Pública | Remove cookies de autenticação |
 | `GET` | `/api/v1/user/profile` | JWT | Dados do usuário logado |
+| `PATCH` | `/api/v1/user/profile` | JWT | Atualiza nome, telefone, data de nascimento |
+| `POST` | `/api/v1/user/change-password` | JWT | Altera senha |
 | `POST` | `/api/v1/contact` | Pública | Envia e-mail de contato |
+| `GET` | `/api/v1/testimonials` | Pública | Lista depoimentos aprovados |
+| `POST` | `/api/v1/testimonials` | JWT | Cria depoimento |
 | `POST` | `/api/v1/anamnese` | JWT | Envia questionário nutricional |
+| `GET` | `/api/v1/anamnese/last` | JWT | Última anamnese (pré-preenchimento) |
 | `POST` | `/api/v1/diet/generate` | JWT | Enfileira geração de dieta (retorna job_id) |
 | `GET` | `/api/v1/diet/status/<job_id>` | JWT | Polling do status de geração |
-| `GET` | `/api/v1/diet` | JWT | Retorna o plano alimentar mais recente |
-| `GET` | `/api/v1/diet/list` | JWT | Histórico completo de planos alimentares |
-| `GET` | `/api/v1/diet/<id>` | JWT | Plano alimentar específico por ID |
+| `GET` | `/api/v1/diet` | JWT | Plano alimentar mais recente |
+| `GET` | `/api/v1/diet/list` | JWT | Histórico completo de planos |
+| `GET` | `/api/v1/diet/<id>` | JWT | Plano alimentar por ID |
 | `GET` | `/api/v1/diet/<id>/pdf` | JWT | Download do plano em PDF |
+| `PATCH` | `/api/v1/diet/<id>/substitutions` | JWT | Atualiza substituições de alimentos |
+| `PATCH` | `/api/v1/diet/<diet_id>/meal/<meal_id>/regenerate` | JWT | Regenera uma refeição |
+| `POST` | `/api/v1/diet/<diet_id>/meal/<meal_id>/undo` | JWT | Desfaz última regeneração |
 | `GET` | `/health/` | Pública | Health check |
 
-> Todos os endpoints protegidos exigem `Authorization: Bearer <token>`.
+> Todos os endpoints protegidos aceitam `Authorization: Bearer <token>` ou cookie HttpOnly `access_token`.
 
 ---
 
@@ -164,18 +179,19 @@ A documentação técnica detalhada está na pasta **`docs/`**:
 | `ARCHITECTURE.md` | Arquitetura do sistema em 3 camadas |
 | `DATABASE.md` | Schema do banco de dados |
 | `ROADMAP.md` | Fases de desenvolvimento (MVP → V2 → V3) |
-| `PROMPTS.md` | Prompts usados pela IA |
+| `PROMPTS.md` | Arquitetura de prompts e pós-processamento da IA |
 | `GIT_CONVENTION.md` | Convenções de branches e commits |
 | `SECURITY.md` | Boas práticas e checklist de segurança |
 | `SECURITY_SETUP.md` | Guia rápido de setup de segurança |
+| `DARK_MODE_DOCUMENTATION.md` | Implementação do dark mode |
 
 ---
 
 ## 🔒 Segurança
 
 - Variáveis sensíveis isoladas em `.env` (nunca commitadas)
-- JWT com `ACCESS_TOKEN_LIFETIME` de 8h e refresh de 7 dias
-- Rate limiting: `3/day` para geração de dieta, `60/hour` para usuários autenticados, `5/hour` para contato
+- JWT com `ACCESS_TOKEN_LIFETIME` de 8h e refresh de 7 dias, servidos via cookies HttpOnly
+- Rate limiting: `3/day` para geração de dieta, `3/day` para regeneração de refeição, `60/hour` para usuários autenticados, `5/hour` para contato
 - CORS restritivo em produção (`DEBUG=False`)
 - Pre-commit hook disponível em `scripts/pre-commit-hook`
 
@@ -186,7 +202,7 @@ A documentação técnica detalhada está na pasta **`docs/`**:
 - [ ] Dashboard nutricional
 - [ ] Testes de integração com Cypress
 - [ ] CI/CD com GitHub Actions
-- [ ] Deploy em produção (Docker + PostgreSQL)
+- [ ] Docker + docker-compose
 
 ---
 
