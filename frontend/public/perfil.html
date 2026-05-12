@@ -99,6 +99,10 @@
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
               Segurança
             </div>
+            <div class="sidebar-nav-item sidebar-nav-danger" data-panel="excluir">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+              Excluir Conta
+            </div>
           </nav>
         </aside>
 
@@ -257,6 +261,40 @@
                   <button type="submit" class="btn-save" id="btnSaveSenha">
                     <div class="spinner-sm" id="spinnerSenha"></div>
                     Alterar Senha
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- Panel: Excluir Conta -->
+          <div class="panel" id="panel-excluir">
+            <div class="card">
+              <div class="card-title">Excluir Conta</div>
+              <div class="card-subtitle">Esta ação é permanente e não pode ser desfeita</div>
+
+              <div class="delete-account-warning">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <div>
+                  <strong>Atenção: esta ação não pode ser revertida.</strong>
+                  <p>Ao excluir sua conta, todos os seus dados serão removidos permanentemente, incluindo dietas geradas, histórico alimentar e informações pessoais.</p>
+                </div>
+              </div>
+
+              <div class="alert alert-error" id="alertExcluirErr"></div>
+
+              <form id="formExcluir" novalidate>
+                <div class="form-grid">
+                  <div class="form-group full">
+                    <label class="form-label">Confirme sua senha para continuar</label>
+                    <input type="password" class="form-input" id="inputSenhaExcluir" placeholder="Digite sua senha atual" autocomplete="current-password" />
+                  </div>
+                </div>
+
+                <div class="form-actions">
+                  <button type="submit" class="btn-delete-account" id="btnExcluirConta">
+                    <div class="spinner-sm" id="spinnerExcluir"></div>
+                    Excluir minha conta permanentemente
                   </button>
                 </div>
               </form>

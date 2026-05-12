@@ -580,6 +580,105 @@
     }
   });
 
+  // --- Delete account ---
+  (function () {
+    let modalOverlay = null;
+
+    function buildModal() {
+      if (document.getElementById('deleteModalOverlay')) return;
+      const overlay = document.createElement('div');
+      overlay.className = 'delete-modal-overlay';
+      overlay.id = 'deleteModalOverlay';
+      overlay.innerHTML = `
+        <div class="delete-modal" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+          <div class="delete-modal-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          </div>
+          <div class="delete-modal-title" id="deleteModalTitle">Tem certeza absoluta?</div>
+          <div class="delete-modal-body">
+            Você está prestes a excluir permanentemente sua conta e <strong>todos os seus dados</strong>, incluindo dietas, histórico e informações pessoais.<br><br>
+            <strong>Esta ação não pode ser desfeita.</strong>
+          </div>
+          <div class="delete-modal-actions">
+            <button class="btn-cancel-modal" id="btnCancelDeleteModal">Cancelar</button>
+            <button class="btn-confirm-delete" id="btnConfirmDelete">Sim, excluir minha conta</button>
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+      modalOverlay = overlay;
+
+      document.getElementById('btnCancelDeleteModal').addEventListener('click', closeModal);
+      overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) closeModal();
+      });
+      document.addEventListener('keydown', function onKey(e) {
+        if (e.key === 'Escape') { closeModal(); document.removeEventListener('keydown', onKey); }
+      });
+    }
+
+    function openModal() {
+      buildModal();
+      requestAnimationFrame(function () {
+        document.getElementById('deleteModalOverlay').classList.add('show');
+      });
+    }
+
+    function closeModal() {
+      const overlay = document.getElementById('deleteModalOverlay');
+      if (overlay) {
+        overlay.classList.remove('show');
+      }
+    }
+
+    document.getElementById('formExcluir').addEventListener('submit', function (e) {
+      e.preventDefault();
+      hideAlert('alertExcluirErr');
+
+      const senha = document.getElementById('inputSenhaExcluir').value.trim();
+      if (!senha) {
+        showAlert('alertExcluirErr', 'Digite sua senha para confirmar.');
+        return;
+      }
+
+      openModal();
+
+      // Bind confirm button fresh each open to avoid duplicate listeners
+      const btnConfirm = document.getElementById('btnConfirmDelete');
+      const btnConfirmClone = btnConfirm.cloneNode(true);
+      btnConfirm.parentNode.replaceChild(btnConfirmClone, btnConfirm);
+
+      btnConfirmClone.addEventListener('click', async function () {
+        closeModal();
+        setLoading('btnExcluirConta', 'spinnerExcluir', true);
+
+        try {
+          const res = await apiFetch(`${API_BASE}/user/delete-account`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: senha }),
+          });
+
+          const json = await res.json();
+
+          if (!res.ok) {
+            const msg = json.error || Object.values(json).flat().join(' ');
+            showAlert('alertExcluirErr', msg || 'Erro ao excluir conta.');
+            return;
+          }
+
+          // Limpar dados locais e redirecionar
+          localStorage.clear();
+          sessionStorage.clear();
+          window.location.href = '/?conta_excluida=1';
+        } catch {
+          showAlert('alertExcluirErr', 'Erro de conexão. Tente novamente.');
+        } finally {
+          setLoading('btnExcluirConta', 'spinnerExcluir', false);
+        }
+      });
+    });
+  }());
+
   // --- Init ---
   loadProfile();
 })();
