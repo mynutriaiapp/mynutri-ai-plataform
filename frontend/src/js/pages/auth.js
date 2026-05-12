@@ -140,7 +140,13 @@
       const data = await res.json();
 
       if (!res.ok) {
-        const msg = data.email?.[0] || data.senha?.[0] || data.nome?.[0] || 'Erro ao criar conta.';
+        const msg = data.email?.[0]
+          || data.senha?.[0]
+          || data.nome?.[0]
+          || data.non_field_errors?.[0]
+          || data.detail
+          || (typeof data === 'object' ? Object.values(data).flat()[0] : null)
+          || 'Erro ao criar conta.';
         showError(msg);
         setLoading(btn, false);
         return;

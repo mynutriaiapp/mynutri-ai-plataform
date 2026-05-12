@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (
     RegisterAPIView, ProfileAPIView, EmailTokenObtainPairView,
     ContactAPIView, GoogleAuthAPIView, GoogleOAuthCallbackView, TestimonialAPIView,
-    LogoutAPIView, CookieTokenRefreshView, ChangePasswordAPIView,
+    LogoutAPIView, CookieTokenRefreshView, ChangePasswordAPIView, DeleteAccountAPIView,
 )
 
 app_name = 'user'
@@ -32,6 +32,9 @@ urlpatterns = [
 
     # POST /api/v1/user/change-password → Altera senha (requer current_password + new_password)
     path('user/change-password', ChangePasswordAPIView.as_view(), name='api-change-password'),
+
+    # DELETE /api/v1/user/delete-account → Exclui permanentemente a conta (requer senha)
+    path('user/delete-account', DeleteAccountAPIView.as_view(), name='api-delete-account'),
 
     # POST /api/v1/contact             → Envia e-mail de contato (público, rate-limit 5/h)
     path('contact', ContactAPIView.as_view(), name='api-contact'),

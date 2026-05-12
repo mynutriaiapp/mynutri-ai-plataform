@@ -490,3 +490,35 @@ class ChangePasswordAPIView(APIView):
         logger.info('Password changed — user_id=%d', request.user.id)
 
         return Response({'message': 'Senha alterada com sucesso.'}, status=status.HTTP_200_OK)
+
+
+class DeleteAccountAPIView(APIView):
+    """
+    DELETE /api/v1/user/delete-account
+    Exclui permanentemente a conta do usuário autenticado e todos os dados relacionados.
+    Body: { password } — confirmação obrigatória de senha
+    Requer: Authorization: Bearer <token>
+    """
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        password = request.data.get('password', '')
+
+        if not password:
+            return Response(
+                {'error': 'A senha é obrigatória para confirmar a exclusão da conta.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not request.user.check_password(password):
+            return Response(
+                {'error': 'Senha incorreta. Não foi possível excluir a conta.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user_id = request.user.id
+        user_email = request.user.email
+        request.user.delete()
+        logger.info('Account permanently deleted — user_id=%d email=%s', user_id, user_email)
+
+        return Response({'message': 'Conta excluída com sucesso.'}, status=status.HTTP_200_OK)
